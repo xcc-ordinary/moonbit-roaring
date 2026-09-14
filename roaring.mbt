@@ -280,7 +280,9 @@ pub fn RoaringBitmap::max(self : RoaringBitmap) -> UInt? {
 // carries a stale container type forward.
 
 ///|
-/// Union: A ∪ B
+/// Union: A ∪ B. Merge-walks both bitmaps' sorted container keys; where a
+/// key exists in both, the two containers are combined and re-optimized, so
+/// e.g. two small Array containers can come back as a single Run.
 pub fn RoaringBitmap::union(
   self : RoaringBitmap,
   other : RoaringBitmap,
@@ -320,7 +322,9 @@ pub fn RoaringBitmap::union(
 }
 
 ///|
-/// Intersection: A ∩ B
+/// Intersection: A ∩ B. Keys present in only one side are dropped without
+/// inspecting their container; matching keys are intersected and any
+/// container that becomes empty is removed from the result entirely.
 pub fn RoaringBitmap::intersect(
   self : RoaringBitmap,
   other : RoaringBitmap,
@@ -353,7 +357,8 @@ pub fn RoaringBitmap::intersect(
 }
 
 ///|
-/// Difference: A \ B
+/// Difference: A \ B (elements in self but not in other). Keys unique to
+/// self pass through unchanged; keys unique to other are ignored.
 pub fn RoaringBitmap::difference(
   self : RoaringBitmap,
   other : RoaringBitmap,
@@ -391,7 +396,9 @@ pub fn RoaringBitmap::difference(
 }
 
 ///|
-/// Symmetric difference: A ⊕ B
+/// Symmetric difference: A ⊕ B (elements in exactly one of the two sets).
+/// Keys present in only one bitmap pass through unchanged; matching keys
+/// are xor'd at the container level and dropped if the result is empty.
 pub fn RoaringBitmap::xor(
   self : RoaringBitmap,
   other : RoaringBitmap,
@@ -436,7 +443,9 @@ pub fn RoaringBitmap::xor(
 // ============ Comparison ============
 
 ///|
-/// Check if two bitmaps contain the same elements
+/// Structural equality by content, not by internal container layout: two
+/// bitmaps with the same elements are equal even if one stores a range as
+/// a Run and the other happens to store it as an Array.
 pub fn RoaringBitmap::equals(
   self : RoaringBitmap,
   other : RoaringBitmap,
@@ -463,7 +472,9 @@ pub fn RoaringBitmap::is_subset(
 // ============ Conversion ============
 
 ///|
-/// Convert to sorted array
+/// Decode every container back into a flat, ascending Array[UInt]. O(n) in
+/// the bitmap's cardinality; prefer `contains`/`size` when you don't need
+/// every element materialized.
 pub fn RoaringBitmap::to_array(self : RoaringBitmap) -> Array[UInt] {
   let result = []
   for hc in self.containers {
