@@ -52,16 +52,12 @@ pub struct RoaringBitmap {
 ///|
 /// Error types
 pub enum RoaringError {
-  InvalidInput(String)
-  SerializationError(String)
   DeserializationError(String)
 } derive(Eq, Debug)
 
 ///|
-impl Show for RoaringError with fn output(self, logger) {
+pub impl Show for RoaringError with fn output(self, logger) {
   match self {
-    InvalidInput(msg) => logger.write_string("InvalidInput: " + msg)
-    SerializationError(msg) => logger.write_string("SerializationError: " + msg)
     DeserializationError(msg) =>
       logger.write_string("DeserializationError: " + msg)
   }
