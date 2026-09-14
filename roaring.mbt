@@ -457,25 +457,8 @@ pub fn RoaringBitmap::is_subset(
 }
 
 // ============ Serialization (CRoaring-compatible) ============
-
-///|
-/// Serialize to portable binary format (compatible with CRoaring)
-pub fn RoaringBitmap::serialize(self : RoaringBitmap, portable : Bool) -> Bytes {
-  ignore(self)
-  ignore(portable)
-  // TODO: implement official portable format from RoaringFormatSpec
-  Bytes::new(0)
-}
-
-///|
-/// Deserialize from portable binary format
-pub fn RoaringBitmap::deserialize(
-  _data : Bytes,
-  _portable : Bool,
-) -> Result[RoaringBitmap, RoaringError] {
-  // TODO: implement with error handling
-  Err(RoaringError::DeserializationError("not implemented"))
-}
+//
+// serialize() / deserialize() are implemented in serialize.mbt
 
 // ============ Conversion ============
 
