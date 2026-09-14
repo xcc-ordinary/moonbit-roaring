@@ -1,4 +1,6 @@
 .DS_Store
+node_modules/
+tools/crossref-fixtures/fixtures.json
 _build/
 target/
 target

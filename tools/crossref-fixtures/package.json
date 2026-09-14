@@ -1,0 +1,13 @@
+{
+  "name": "crossref-fixtures",
+  "version": "1.0.0",
+  "description": "Generates golden test fixtures from roaring-wasm (official CRoaring WASM port) to verify byte-for-byte serialization compatibility",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "generate": "node generate.mjs && node to_mbt.mjs"
+  },
+  "dependencies": {
+    "roaring-wasm": "^1.1.0"
+  }
+}
