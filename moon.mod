@@ -19,7 +19,13 @@ repository = "https://github.com/xcc-ordinary/moonbit-roaring"
 
 license = "Apache-2.0"
 
-keywords = ["roaring", "bitmap", "compression", "serialization", "data-structures"]
+keywords = [
+  "roaring",
+  "bitmap",
+  "compression",
+  "serialization",
+  "data-structures",
+]
 
 preferred_target = "wasm"
 
