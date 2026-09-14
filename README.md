@@ -1,8 +1,8 @@
 # moonbit-roaring
 
-A **production-ready** RoaringBitmap implementation for MoonBit with true run-length optimization and official portable serialization format.
+A RoaringBitmap implementation for MoonBit with true run-length optimization and official portable serialization format.
 
-**Status**: Active development for MoonBit Hackathon Sept 2026  
+**Status**: Core, serialization, range operations, lazy iteration, and rank/select are implemented and tested (103 tests passing). Built for the MoonBit Hackathon Sept 2026.  
 **License**: Apache-2.0  
 **Target**: `wasm`, `wasm-gc`, `js`, `native`
 
@@ -10,7 +10,7 @@ A **production-ready** RoaringBitmap implementation for MoonBit with true run-le
 
 ## What This Project Does
 
-This is a **complete** RoaringBitmap library that fills two critical gaps in the MoonBit ecosystem:
+This is a RoaringBitmap library that fills two critical gaps in the MoonBit ecosystem:
 
 1. **真正接入主流程的 Run-length 容器优化** — 不是死代码,而是在 `add()`, `union()` 等核心操作中真正触发的自动压缩
 2. **与 CRoaring 兼容的官方可移植序列化格式** — 可以与 Java/C++/Go/Rust/Python 的 RoaringBitmap 实现互通数据
@@ -22,11 +22,11 @@ RoaringBitmap is widely used in production systems (Lucene, ClickHouse, Spark, D
 - It supports **fast set operations** (union, intersection) directly on compressed data
 - It has a **portable binary format** that works across languages
 
-The existing MoonBit implementation (`kesmeey/RoaringBitmap`) has the data structures but:
-- Run-length container optimization is **never triggered** (dead code path)
-- **No serialization format** — cannot exchange data with other languages
+As of 2026-09-14, the existing MoonBit implementation (`kesmeey/RoaringBitmap`, last pushed 2025-06-25) has the data structures but:
+- Run-length container optimization is **never triggered** — verified by grepping its source: `optimize_container` has zero call sites, and `container_add`/`container_union` only ever promote Array → Bitmap, never detect and collapse a consecutive run
+- **No serialization format** — no `serialize`/`deserialize`/`to_bytes`/`from_bytes` anywhere in its source, so it cannot exchange data with other languages
 
-This project delivers a **battle-tested, interoperable** RoaringBitmap for MoonBit.
+This project delivers an interoperable RoaringBitmap for MoonBit that closes both gaps, verified against real CRoaring output rather than only against itself.
 
 ---
 
@@ -38,28 +38,34 @@ moon add xcc-ordinary/moonbit-roaring
 
 ---
 
-## Core Features (Planned Delivery by 2026-09-24)
+## Core Features
 
-### ✅ Phase 1: Three-Container Core (Sept 13-18)
-- [x] ArrayContainer (< 4096 elements, sorted array)
-- [x] BitmapContainer (≥ 4096 elements, 8KB bitmap)
-- [ ] RunContainer (consecutive ranges, RLE encoding)
-- [ ] **Auto-optimization hooks** in `add()`, `add_many()`, `union()`, `intersect()`
-- [ ] Container conversion at **4096-element threshold**
-- [ ] Run-length heuristics: consecutive runs > 50% of elements
+### Phase 1: Three-Container Core
+- [x] ArrayContainer (sparse data, sorted `UInt16` array)
+- [x] BitmapContainer (dense data, 8KB bitmap)
+- [x] RunContainer (consecutive ranges, RLE encoding)
+- [x] **Auto-optimization hooks** in `add()`, `add_many()`, `remove()`, `union()`, `intersect()`, `difference()`, `xor()` — every mutation re-picks the cheapest of the three representations by byte cost
+- [x] Container conversion at the **4096-element threshold** (Array ↔ Bitmap tie-break) and at the run-vs-array cost crossover
+- [x] Range operations: `add_range`/`remove_range`/`contains_range`/`from_range` — a bucket fully covered by the range collapses to a single Run container in O(1), without decoding or looping over elements
 
-### ✅ Phase 2: Official Serialization Format (Sept 19-20)
-- [ ] `serialize(portable: Bool) -> Bytes` — output CRoaring-compatible binary
-- [ ] `deserialize(data: Bytes, portable: Bool) -> RoaringBitmap!`
-- [ ] Round-trip tests: MoonBit → serialize → deserialize → MoonBit
-- [ ] **Cross-language diff tests**: verify byte-level compatibility with `roaring-wasm` (CRoaring WASM port)
+### Phase 2: Official Serialization Format
+- [x] `serialize(portable: Bool) -> Bytes` — output CRoaring-compatible binary
+- [x] `deserialize(data: Bytes, portable: Bool) -> Result[RoaringBitmap, RoaringError]`
+- [x] Round-trip tests: MoonBit → serialize → deserialize → MoonBit
+- [x] **Cross-language diff tests**: verify byte-level compatibility with `roaring-wasm` (CRoaring WASM port)
 
-### ✅ Phase 3: Verification & Polish (Sept 21-23)
-- [ ] 100+ test cases covering all three container types
-- [ ] Golden test suite with official CRoaring-generated fixtures
-- [ ] Performance benchmarks: compression ratio, operation speed
-- [ ] Example CLI tool: demonstrate serialization interop with Node.js/WASM
-- [ ] Complete API documentation with usage examples
+### Phase 3: Query & Iteration
+- [x] `iter()` — lazy `Iter[UInt]` that decodes one bucket at a time, so `.take(n)`/`.find_first(f)` can stop early instead of paying for a full `to_array()` decode
+- [x] `rank(value)` / `select(index)` — CRoaring-style "how many elements ≤ x" / "the i-th smallest element", each implemented per-container without a full decode
+- [x] `union_all` / `intersect_all` — fold a list of bitmaps in one call (e.g. merging several search-term postings lists)
+
+### Phase 4: Verification & Polish
+- [x] 100+ test cases covering all three container types, boundary/tie-break points, and the range/iteration APIs
+- [x] Golden test suite with official CRoaring-generated fixtures
+- [x] Compression ratio verification (`get_stats()`, exercised in the example below)
+- [x] Example: runnable inverted-index demo (`examples/inverted_index`)
+- [ ] Performance benchmarks (throughput, not just byte-size compression ratio)
+- [ ] Publish to mooncakes.io
 
 ---
 
@@ -67,37 +73,53 @@ moon add xcc-ordinary/moonbit-roaring
 
 ```moonbit
 // Create from sparse data → ArrayContainer
-let bitmap = @roaring.from_array([1, 100, 1000, 10000])
+let bitmap = @roaring.RoaringBitmap::from_array([1U, 100U, 1000U, 10000U])
 
-// Add consecutive range → auto-converts to RunContainer
-let mut dense = @roaring.new()
-for i in 0..<10000 {
-  dense = dense.add(i)
-}
+// add_range auto-converts a whole bucket to a RunContainer in O(1) —
+// no per-element loop, no intermediate array of 10000 entries.
+let dense = @roaring.RoaringBitmap::from_range(0U, 10000U)
 // dense now uses RunContainer internally (a few bytes, not 8KB)
 
 // Serialize to official portable format
-let bytes = dense.serialize(portable=true)
+let bytes = dense.serialize(true)
 
 // Deserialize from CRoaring-generated data
-let restored = @roaring.deserialize(bytes, portable=true)!
+let restored = match @roaring.RoaringBitmap::deserialize(bytes, true) {
+  Ok(bm) => bm
+  Err(e) => {
+    println("deserialize failed: \{e}")
+    panic()
+  }
+}
 
 // Fast set operations
 let result = bitmap1.union(bitmap2).intersect(bitmap3)
+
+// Merge several bitmaps at once
+let merged = @roaring.RoaringBitmap::union_all([bitmap1, bitmap2, bitmap3])
+
+// Lazy iteration and rank/select
+let first_three = dense.iter().take(3).to_array()
+let how_many_le_500 = dense.rank(500U)
+let fifth_smallest = dense.select(4)
 ```
 
 ---
 
 ## Differentiators vs. Existing Implementation
 
+As of 2026-09-14, `kesmeey/RoaringBitmap` (last pushed 2025-06-25):
+
 | Feature | `kesmeey/RoaringBitmap` | This Project |
 |---------|------------------------|--------------|
 | ArrayContainer | ✅ | ✅ |
 | BitmapContainer | ✅ | ✅ |
-| RunContainer | ⚠️ Defined but never triggered | ✅ Hooked into all operations |
+| RunContainer | ⚠️ Defined but never triggered (`optimize_container` has zero call sites) | ✅ Hooked into every mutation |
 | Portable serialization | ❌ No implementation | ✅ CRoaring-compatible |
 | Cross-language interop | ❌ | ✅ Tested with `roaring-wasm` |
 | Compression for consecutive data | ❌ Falls back to Bitmap (8KB) | ✅ Uses Run (< 100 bytes) |
+| Range operations (`add_range`, etc.) | ❌ | ✅ O(1) fast path for full-bucket ranges |
+| Lazy iteration / rank / select | ❌ | ✅ `iter()`, `rank()`, `select()` |
 | Test coverage | ⚠️ Basic | ✅ 100+ cases + golden fixtures |
 
 ---
@@ -135,31 +157,34 @@ let result = bitmap1.union(bitmap2).intersect(bitmap3)
 
 ## Use Cases
 
+A complete runnable version of the inverted-index case below lives in
+`examples/inverted_index` — run it with `moon run examples/inverted_index`.
+
 ### 1. Search Engine Inverted Index
 ```moonbit
 // Document IDs matching "machine" AND "learning"
-let docs_machine = @roaring.from_array([1, 5, 10, 15, 20])
-let docs_learning = @roaring.from_array([5, 15, 25, 30])
+let docs_machine = @roaring.RoaringBitmap::from_array([1U, 5U, 10U, 15U, 20U])
+let docs_learning = @roaring.RoaringBitmap::from_array([5U, 15U, 25U, 30U])
 let result = docs_machine.intersect(docs_learning) // [5, 15]
+
+// Merge postings lists for several terms at once
+let all_terms = @roaring.RoaringBitmap::union_all([docs_machine, docs_learning])
 ```
 
 ### 2. Time-Series Event Filtering
 ```moonbit
-// Events in time range [1000, 5000]
-let mut events = @roaring.new()
-for ts in 1000..<5000 {
-  events = events.add(ts)
-}
+// Events in time range [1000, 5000) — the O(1) range fast path, not a loop
+let events = @roaring.RoaringBitmap::from_range(1000U, 5000U)
 // Internally uses RunContainer (< 100 bytes, not 8KB Bitmap)
-let serialized = events.serialize(portable=true)
+let serialized = events.serialize(true)
 // Send to Python analytics pipeline for further processing
 ```
 
 ### 3. Cross-Language Data Exchange
 ```moonbit
 // MoonBit service serializes user IDs
-let active_users = @roaring.from_array([101, 102, 105, 200])
-let bytes = active_users.serialize(portable=true)
+let active_users = @roaring.RoaringBitmap::from_array([101U, 102U, 105U, 200U])
+let bytes = active_users.serialize(true)
 
 // Java/Go/Rust service deserializes the same data
 // (using their respective RoaringBitmap libraries)
@@ -169,16 +194,17 @@ let bytes = active_users.serialize(portable=true)
 
 ## Development Roadmap
 
-| Date | Milestone |
-|------|-----------|
-| Sept 13 | ✅ Project setup, ecosystem gap analysis, API design |
-| Sept 14-15 | Container types + auto-optimization hooks |
-| Sept 16-17 | Set operations (union, intersect, difference, xor) |
-| Sept 18 | Run-length heuristics + conversion logic |
-| Sept 19-20 | Serialization format + cross-language diff tests |
-| Sept 21-22 | Test suite (100+ cases) + golden fixtures |
-| Sept 23 | Example CLI + documentation |
-| Sept 24 | Final verification, publish to mooncakes.io |
+| Date | Milestone | Status |
+|------|-----------|--------|
+| Sept 13 | Project setup, ecosystem gap analysis, API design | ✅ Done |
+| Sept 14-15 | Container types + auto-optimization hooks | ✅ Done |
+| Sept 16-17 | Set operations (union, intersect, difference, xor) | ✅ Done |
+| Sept 18 | Run-length heuristics + conversion logic | ✅ Done |
+| Sept 19-20 | Serialization format + cross-language diff tests | ✅ Done |
+| Sept 21-22 | Test suite (100+ cases) + golden fixtures | ✅ Done |
+| — | Range ops, lazy iteration, rank/select, multi-way merge | ✅ Done |
+| Sept 23 | Example + documentation | ✅ Done |
+| Sept 24 | Final verification, publish to mooncakes.io | ⏳ Pending |
 
 ---
 

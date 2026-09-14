@@ -1,5 +1,6 @@
 // Round-trip and error-handling tests for the portable serialization format.
 
+///|
 test "round-trip empty bitmap" {
   let bm = RoaringBitmap::new()
   let bytes = bm.serialize(true)
@@ -10,6 +11,7 @@ test "round-trip empty bitmap" {
   assert_true(restored.is_empty())
 }
 
+///|
 test "round-trip sparse array container" {
   let bm = RoaringBitmap::from_array([1U, 100U, 1000U, 50000U])
   let bytes = bm.serialize(true)
@@ -20,6 +22,7 @@ test "round-trip sparse array container" {
   assert_true(bm.equals(restored))
 }
 
+///|
 test "round-trip dense bitmap container" {
   let values = []
   for i = 0; i < 16384; i = i + 2 {
@@ -36,6 +39,7 @@ test "round-trip dense bitmap container" {
   assert_true(bm.equals(restored))
 }
 
+///|
 test "round-trip run container" {
   let values = []
   for i = 0; i < 10000; i = i + 1 {
@@ -52,6 +56,7 @@ test "round-trip run container" {
   assert_true(bm.equals(restored))
 }
 
+///|
 test "round-trip mixed container types across many buckets" {
   let values = []
   // bucket 0: sparse array
@@ -80,6 +85,7 @@ test "round-trip mixed container types across many buckets" {
   assert_eq(restored.get_stats().total_containers, 3)
 }
 
+///|
 test "round-trip more than 4 containers triggers offset header" {
   let values = []
   for bucket = 0; bucket < 6; bucket = bucket + 1 {
@@ -95,6 +101,7 @@ test "round-trip more than 4 containers triggers offset header" {
   assert_true(bm.equals(restored))
 }
 
+///|
 test "deserialize rejects empty input" {
   let empty_bytes = Bytes::new(0)
   match RoaringBitmap::deserialize(empty_bytes, true) {
@@ -103,6 +110,7 @@ test "deserialize rejects empty input" {
   }
 }
 
+///|
 test "deserialize rejects invalid cookie" {
   let buf = @buffer.Buffer::Buffer()
   buf.write_uint_le(999U)
@@ -114,6 +122,7 @@ test "deserialize rejects invalid cookie" {
   }
 }
 
+///|
 test "deserialize rejects truncated container data" {
   let bm = RoaringBitmap::from_array([1U, 2U, 3U])
   let bytes = bm.serialize(true)

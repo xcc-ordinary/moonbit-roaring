@@ -8,6 +8,7 @@
 
 // ============ Array vs Bitmap tie-break (both cost 8192 bytes at n=4096) ============
 
+///|
 test "exactly 4096 scattered values ties Array vs Bitmap, Array wins" {
   // Each value is isolated (no two consecutive), so Run costs far more
   // than either. At n=4096, array_cost == bitmap_cost == 8192; the tie
@@ -23,6 +24,7 @@ test "exactly 4096 scattered values ties Array vs Bitmap, Array wins" {
   assert_eq(stats.bitmap_containers, 0)
 }
 
+///|
 test "4097 scattered values breaks the tie toward Bitmap" {
   let values = []
   for i = 0; i < 4097; i = i + 1 {
@@ -37,6 +39,7 @@ test "4097 scattered values breaks the tie toward Bitmap" {
 
 // ============ Run vs Array tie-break (both cost 4 bytes for 2 consecutive values) ============
 
+///|
 test "two consecutive values tie Run vs Array, Run wins" {
   // One run [5,6]: run_cost = 1*4 = 4. As an array: 2*2 = 4. Tie resolves
   // to Run (run_cost <= array_cost is checked before array_cost <= bitmap_cost).
@@ -46,6 +49,7 @@ test "two consecutive values tie Run vs Array, Run wins" {
   assert_eq(stats.array_containers, 0)
 }
 
+///|
 test "a single isolated value never becomes a Run" {
   // One run of length 0 costs 4 bytes; as an array, 1 element costs 2
   // bytes. Array must win: a lone value should never pay the Run overhead.
@@ -55,6 +59,7 @@ test "a single isolated value never becomes a Run" {
   assert_eq(stats.run_containers, 0)
 }
 
+///|
 test "three consecutive values prefer Run over Array" {
   // One run costs 4 bytes; as an array, 3 elements cost 6 bytes.
   let bm = RoaringBitmap::from_array([10U, 11U, 12U])
@@ -64,24 +69,28 @@ test "three consecutive values prefer Run over Array" {
 
 // ============ UInt16 / UInt32 boundary values ============
 
+///|
 test "value 0 is stored and retrieved correctly" {
   let bm = RoaringBitmap::singleton(0U)
   assert_true(bm.contains(0U))
   assert_eq(bm.to_array(), [0U])
 }
 
+///|
 test "max low-16 value 65535 stays in bucket 0" {
   let bm = RoaringBitmap::singleton(65535U)
   assert_true(bm.contains(65535U))
   assert_eq(bm.get_stats().total_containers, 1)
 }
 
+///|
 test "min high-16 value 65536 starts bucket 1" {
   let bm = RoaringBitmap::singleton(65536U)
   assert_true(bm.contains(65536U))
   assert_false(bm.contains(65535U))
 }
 
+///|
 test "0 and UInt32 max coexist without collision" {
   let min_val = 0U
   let max_val = 4294967295U // 2^32 - 1
@@ -93,6 +102,7 @@ test "0 and UInt32 max coexist without collision" {
   assert_eq(bm.max(), Some(max_val))
 }
 
+///|
 test "values straddling a mid-range bucket boundary" {
   // 2^31 sits exactly on a high-16 boundary (bucket 32768).
   let boundary : UInt = 2147483648U // 2^31
@@ -105,6 +115,7 @@ test "values straddling a mid-range bucket boundary" {
 
 // ============ Downgrade paths ============
 
+///|
 test "removing elements downgrades Bitmap back to Array" {
   let values = []
   for i = 0; i < 4097; i = i + 1 {
@@ -122,6 +133,7 @@ test "removing elements downgrades Bitmap back to Array" {
   assert_eq(stats.bitmap_containers, 0)
 }
 
+///|
 test "removing the only element of a container drops the container entirely" {
   let bm = RoaringBitmap::from_array([1U, 70000U]).remove(70000U)
   assert_eq(bm.size(), 1)
@@ -131,6 +143,7 @@ test "removing the only element of a container drops the container entirely" {
 
 // ============ Many buckets: run-flag bitset spans multiple bytes ============
 
+///|
 test "run flag bitset correctly marks a bit past the first byte" {
   // 10 buckets: buckets 0-8 hold a single sparse value each (Array,
   // cheapest for 1 element); bucket 9 holds a consecutive run. Container
@@ -159,6 +172,7 @@ test "run flag bitset correctly marks a bit past the first byte" {
 
 // ============ add_many across boundaries ============
 
+///|
 test "add_many with duplicates spanning multiple buckets deduplicates correctly" {
   let values = [1U, 1U, 70000U, 70000U, 1U, 140000U]
   let bm = RoaringBitmap::from_array(values)
@@ -166,6 +180,7 @@ test "add_many with duplicates spanning multiple buckets deduplicates correctly"
   assert_eq(bm.to_array(), [1U, 70000U, 140000U])
 }
 
+///|
 test "add_many then scattered remove leaves correct residual set" {
   let values = []
   for i = 0; i < 100; i = i + 1 {

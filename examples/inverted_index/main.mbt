@@ -9,10 +9,15 @@
 //
 // Run with: moon run examples/inverted_index
 
-fn build_postings(term : String, doc_ids : Array[UInt]) -> (String, @roaring.RoaringBitmap) {
+///|
+fn build_postings(
+  term : String,
+  doc_ids : Array[UInt],
+) -> (String, @roaring.RoaringBitmap) {
   (term, @roaring.RoaringBitmap::from_array(doc_ids))
 }
 
+///|
 fn main {
   // Pretend corpus: doc IDs 0..999. "machine" and "learning" co-occur in a
   // consecutive block of documents (e.g. a single imported dataset), while
@@ -40,7 +45,9 @@ fn main {
   // Query: "machine" AND "learning" -> documents containing both terms.
   let machine_and_learning = machine.intersect(learning)
   println("\"machine\" AND \"learning\": \{machine_and_learning.size()} docs")
-  println("  range: [\{machine_and_learning.min().unwrap()}, \{machine_and_learning.max().unwrap()}]")
+  println(
+    "  range: [\{machine_and_learning.min().unwrap()}, \{machine_and_learning.max().unwrap()}]",
+  )
 
   // Query: "machine" AND "learning" AND "rust" -> narrow further.
   let all_three = machine_and_learning.intersect(rust)
@@ -59,15 +66,21 @@ fn main {
   // paying for an 8KB bitmap or a 600-byte array.
   let stats = machine.get_stats()
   println("\"machine\" postings internal representation:")
-  println("  containers: \{stats.total_containers} (array=\{stats.array_containers}, bitmap=\{stats.bitmap_containers}, run=\{stats.run_containers})")
-  println("  bytes used: \{stats.total_bytes_used} (vs. \{machine.size() * 2} bytes as a plain UInt16 array)")
+  println(
+    "  containers: \{stats.total_containers} (array=\{stats.array_containers}, bitmap=\{stats.bitmap_containers}, run=\{stats.run_containers})",
+  )
+  println(
+    "  bytes used: \{stats.total_bytes_used} (vs. \{machine.size() * 2} bytes as a plain UInt16 array)",
+  )
   println("")
 
   // Portability check: serialize to the CRoaring-compatible format and
   // read it back. In a real system this is what lets a Rust or Go service
   // consume the same postings list this MoonBit indexer produced.
   let bytes = machine.serialize(true)
-  println("Serialized \"machine\" postings to \{bytes.length()} bytes (portable format)")
+  println(
+    "Serialized \"machine\" postings to \{bytes.length()} bytes (portable format)",
+  )
   let restored = match @roaring.RoaringBitmap::deserialize(bytes, true) {
     Ok(r) => r
     Err(e) => {

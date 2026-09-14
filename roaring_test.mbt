@@ -257,3 +257,61 @@ test "is_subset detects true subset" {
   assert_true(a.is_subset(b))
   assert_false(b.is_subset(a))
 }
+
+// ============ Multi-way set operations ============
+
+///|
+test "union_all of an empty array is an empty bitmap" {
+  let result = RoaringBitmap::union_all([])
+  assert_true(result.is_empty())
+}
+
+///|
+test "union_all of a single bitmap returns its contents" {
+  let a = RoaringBitmap::from_array([1U, 2U, 3U])
+  let result = RoaringBitmap::union_all([a])
+  assert_eq(result.to_array(), [1U, 2U, 3U])
+}
+
+///|
+test "union_all merges several bitmaps across container types" {
+  let a = RoaringBitmap::from_array([1U, 2U])
+  let b = RoaringBitmap::from_range(100U, 200U)
+  let c = RoaringBitmap::from_array([2U, 300000U])
+  let result = RoaringBitmap::union_all([a, b, c])
+  assert_eq(result.size(), 2 + 100 + 1)
+  assert_true(result.contains(1U))
+  assert_true(result.contains(150U))
+  assert_true(result.contains(300000U))
+}
+
+///|
+test "intersect_all of an empty array is an empty bitmap" {
+  let result = RoaringBitmap::intersect_all([])
+  assert_true(result.is_empty())
+}
+
+///|
+test "intersect_all of a single bitmap returns its contents" {
+  let a = RoaringBitmap::from_array([1U, 2U, 3U])
+  let result = RoaringBitmap::intersect_all([a])
+  assert_eq(result.to_array(), [1U, 2U, 3U])
+}
+
+///|
+test "intersect_all keeps only values common to every bitmap" {
+  let a = RoaringBitmap::from_array([1U, 2U, 3U, 4U])
+  let b = RoaringBitmap::from_array([2U, 3U, 4U, 5U])
+  let c = RoaringBitmap::from_array([3U, 4U, 5U, 6U])
+  let result = RoaringBitmap::intersect_all([a, b, c])
+  assert_eq(result.to_array(), [3U, 4U])
+}
+
+///|
+test "intersect_all is empty when any bitmap is disjoint from the rest" {
+  let a = RoaringBitmap::from_array([1U, 2U, 3U])
+  let b = RoaringBitmap::from_array([1U, 2U, 3U])
+  let c = RoaringBitmap::from_array([100U])
+  let result = RoaringBitmap::intersect_all([a, b, c])
+  assert_true(result.is_empty())
+}

@@ -440,6 +440,37 @@ pub fn RoaringBitmap::xor(
   { containers: result_containers, size: rebuild_size(result_containers), }
 }
 
+///|
+/// Union of every bitmap in `bitmaps`, e.g. merging the postings lists of
+/// several search terms with a single call instead of folding `union`
+/// manually. Returns an empty bitmap for an empty input.
+pub fn RoaringBitmap::union_all(
+  bitmaps : Array[RoaringBitmap],
+) -> RoaringBitmap {
+  let mut result = RoaringBitmap::new()
+  for i = 0; i < bitmaps.length(); i = i + 1 {
+    result = result.union(bitmaps[i])
+  }
+  result
+}
+
+///|
+/// Intersection of every bitmap in `bitmaps`. An empty input has no
+/// well-defined intersection mathematically; by convention this returns an
+/// empty bitmap rather than raising an error.
+pub fn RoaringBitmap::intersect_all(
+  bitmaps : Array[RoaringBitmap],
+) -> RoaringBitmap {
+  if bitmaps.length() == 0 {
+    return RoaringBitmap::new()
+  }
+  let mut result = bitmaps[0]
+  for i = 1; i < bitmaps.length(); i = i + 1 {
+    result = result.intersect(bitmaps[i])
+  }
+  result
+}
+
 // ============ Comparison ============
 
 ///|
