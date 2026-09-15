@@ -2,9 +2,9 @@
 
 A RoaringBitmap implementation for MoonBit with true run-length optimization and official portable serialization format.
 
-**Status**: Core, serialization, range operations, lazy iteration, and rank/select are implemented and tested (103 tests passing). Built for the MoonBit Hackathon Sept 2026.  
+**Status**: Core, serialization, range operations, lazy iteration, and rank/select are implemented and tested (120 tests passing). Built for the MoonBit Hackathon Sept 2026.  
 **License**: Apache-2.0  
-**Target**: `wasm`, `wasm-gc`, `js`, `native`
+**Target**: `wasm`, `wasm-gc`, `js` (verified); `native` unverified — the MoonBit runtime's own C sources fail to compile on Windows (`rand_s` implicit declaration in `runtime/env.c`), so this target has not been exercised here
 
 ---
 
@@ -60,7 +60,8 @@ moon add xcc-ordinary/moonbit-roaring
 - [x] `union_all` / `intersect_all` — fold a list of bitmaps in one call (e.g. merging several search-term postings lists)
 
 ### Phase 4: Verification & Polish
-- [x] 100+ test cases covering all three container types, boundary/tie-break points, and the range/iteration APIs
+- [x] 120 test cases covering all three container types, boundary/tie-break points, and the range/iteration APIs
+- [x] Bounds-checking property test: every truncated prefix of a serialized bitmap is rejected rather than read out of bounds
 - [x] Golden test suite with official CRoaring-generated fixtures
 - [x] Compression ratio verification (`get_stats()`, exercised in the example below)
 - [x] Example: runnable inverted-index demo (`examples/inverted_index`)
@@ -120,7 +121,7 @@ As of 2026-09-14, `kesmeey/RoaringBitmap` (last pushed 2025-06-25):
 | Compression for consecutive data | ❌ Falls back to Bitmap (8KB) | ✅ Uses Run (< 100 bytes) |
 | Range operations (`add_range`, etc.) | ❌ | ✅ O(1) fast path for full-bucket ranges |
 | Lazy iteration / rank / select | ❌ | ✅ `iter()`, `rank()`, `select()` |
-| Test coverage | ⚠️ Basic | ✅ 100+ cases + golden fixtures |
+| Test coverage | ⚠️ Basic | ✅ 120 cases + golden fixtures |
 
 ---
 
@@ -137,8 +138,8 @@ As of 2026-09-14, `kesmeey/RoaringBitmap` (last pushed 2025-06-25):
 
 ### How We Prove Correctness
 
-1. **Unit tests** — 100+ test cases for each container type and operation
-2. **Property-based tests** — randomly generated sets, verify set semantics hold
+1. **Unit tests** — 120 test cases across container types, operations, and boundary/tie-break points
+2. **Bounds-checking property test** — every truncated prefix of a serialized bitmap must be rejected, proving no length check is missing in the parse path
 3. **Golden tests** — use `roaring-wasm` (official CRoaring WASM port) to generate reference data:
    ```javascript
    const bitmap = new RoaringBitmap32([1, 2, 3, 100, 65536]);
@@ -151,7 +152,7 @@ As of 2026-09-14, `kesmeey/RoaringBitmap` (last pushed 2025-06-25):
 
 - **Official spec**: https://github.com/RoaringBitmap/RoaringFormatSpec
 - **Reference impl**: CRoaring (C), roaring-rs (Rust), roaring-wasm (WASM)
-- **Already verified**: `roaring-wasm` v1.1.0 works on this machine (8 elements → 56 bytes, round-trip verified)
+- **Already verified**: regenerating the fixtures from `roaring-wasm` v1.1.0 (`cd tools/crossref-fixtures && npm install && npm run generate`) reproduces the checked-in `golden_fixtures_test.mbt` byte-identically, across all six fixture shapes (empty, sparse array, dense bitmap, run, mixed three-bucket, six-bucket offset header)
 
 ---
 
@@ -201,7 +202,7 @@ let bytes = active_users.serialize(true)
 | Sept 16-17 | Set operations (union, intersect, difference, xor) | ✅ Done |
 | Sept 18 | Run-length heuristics + conversion logic | ✅ Done |
 | Sept 19-20 | Serialization format + cross-language diff tests | ✅ Done |
-| Sept 21-22 | Test suite (100+ cases) + golden fixtures | ✅ Done |
+| Sept 21-22 | Test suite (120 cases) + golden fixtures | ✅ Done |
 | — | Range ops, lazy iteration, rank/select, multi-way merge | ✅ Done |
 | Sept 23 | Example + documentation | ✅ Done |
 | Sept 24 | Final verification, publish to mooncakes.io | ⏳ Pending |

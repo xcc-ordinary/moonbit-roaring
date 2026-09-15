@@ -129,11 +129,36 @@ test "contains_range true for a fully covered run container" {
 }
 
 ///|
-test "contains_range true for a fully covered array container" {
-  let bm = RoaringBitmap::from_array([5U, 6U, 7U, 8U, 100U])
+test "contains_range on a genuine array container" {
+  // Mostly-isolated values: one 2-long run plus five singletons costs
+  // 6 runs * 4 = 24 bytes as Run vs 7 * 2 = 14 bytes as Array, so this
+  // stays an Array container and exercises the binary-search branch.
+  let bm = RoaringBitmap::from_array([5U, 6U, 20U, 40U, 60U, 80U, 100U])
+  assert_eq(bm.get_stats().array_containers, 1)
+  assert_eq(bm.get_stats().run_containers, 0)
+  // The [5, 6] pair is fully present; extending to 7 is not.
+  assert_true(bm.contains_range(5U, 7U))
+  assert_false(bm.contains_range(5U, 8U))
+  // A single isolated value is a range of length 1.
+  assert_true(bm.contains_range(20U, 21U))
+  // 19 is absent, so a range starting there is not covered.
+  assert_false(bm.contains_range(19U, 21U))
+  // A range starting past the maximum finds no lower bound at all.
+  assert_false(bm.contains_range(200U, 201U))
+}
+
+///|
+test "contains_range on a multi-run container" {
+  // Two separate runs ([5,8] and [100,102]) cost 2 * 4 = 8 bytes as Run
+  // vs 8 * 2 = 16 as Array, so this collapses to a Run container. A range
+  // is covered only if a single run contains it end to end.
+  let bm = RoaringBitmap::from_array([5U, 6U, 7U, 8U, 100U, 101U, 102U])
+  assert_eq(bm.get_stats().run_containers, 1)
   assert_true(bm.contains_range(5U, 9U))
-  assert_false(bm.contains_range(5U, 10U))
-  assert_false(bm.contains_range(4U, 9U))
+  assert_true(bm.contains_range(100U, 103U))
+  // Spanning the gap between the two runs is not covered.
+  assert_false(bm.contains_range(5U, 103U))
+  assert_false(bm.contains_range(8U, 101U))
 }
 
 ///|

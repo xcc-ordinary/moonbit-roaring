@@ -89,6 +89,28 @@ test "rank spans multiple buckets correctly" {
 }
 
 ///|
+test "rank stops early once past the target bucket" {
+  // The scan breaks out as soon as a bucket key exceeds the value's key;
+  // this pins that early-exit arm plus the run-off-the-end fallthrough.
+  let bm = RoaringBitmap::from_array([1U, 70000U])
+  assert_eq(bm.rank(50U), 1)
+  assert_eq(bm.rank(500000U), 2)
+}
+
+///|
+test "rank at a 64-bit word boundary on a bitmap container" {
+  // Bit 63 takes the full-word mask branch rather than (1 << (bit+1)) - 1.
+  let values = []
+  for i = 0; i < 16384; i = i + 2 {
+    values.push(i.reinterpret_as_uint())
+  }
+  let bm = RoaringBitmap::from_array(values)
+  assert_eq(bm.get_stats().bitmap_containers, 1)
+  assert_eq(bm.rank(63U), 32) // evens 0..62
+  assert_eq(bm.rank(64U), 33) // plus 64 itself
+}
+
+///|
 test "rank on a run container matches array semantics" {
   let bm = RoaringBitmap::from_range(100U, 200U)
   assert_eq(bm.rank(99U), 0)

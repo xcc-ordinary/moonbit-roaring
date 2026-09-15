@@ -258,6 +258,83 @@ test "is_subset detects true subset" {
   assert_false(b.is_subset(a))
 }
 
+// ============ Set operations: the "other side leads" merge branches ============
+//
+// The merge walk in each set operation has three arms (a.key < b.key,
+// a.key > b.key, keys equal). Tests above mostly drive the first and third;
+// these pin down the arm where `other` holds the earlier bucket, plus the
+// tail drain of each side.
+
+///|
+test "set operations when other holds the earlier bucket" {
+  let a = RoaringBitmap::from_array([200000U])
+  let b = RoaringBitmap::from_array([1U])
+  assert_eq(a.union(b).to_array(), [1U, 200000U])
+  assert_eq(a.xor(b).to_array(), [1U, 200000U])
+  assert_eq(a.difference(b).to_array(), [200000U])
+  assert_true(a.intersect(b).is_empty())
+}
+
+///|
+test "set operations when other leads within a shared bucket" {
+  let a = RoaringBitmap::from_array([10U, 20U, 30U])
+  let b = RoaringBitmap::from_array([5U, 20U, 25U])
+  assert_eq(a.intersect(b).to_array(), [20U])
+  assert_eq(a.difference(b).to_array(), [10U, 30U])
+  assert_eq(a.xor(b).to_array(), [5U, 10U, 25U, 30U])
+}
+
+///|
+test "xor drains both tails when bucket counts differ" {
+  let a = RoaringBitmap::from_array([1U, 70000U, 140000U])
+  let b = RoaringBitmap::from_array([70000U])
+  assert_eq(a.xor(b).to_array(), [1U, 140000U])
+  assert_eq(b.xor(a).to_array(), [1U, 140000U])
+}
+
+// ============ min / max across container types ============
+
+///|
+test "min and max on a run container" {
+  let bm = RoaringBitmap::from_range(100U, 200U)
+  assert_eq(bm.get_stats().run_containers, 1)
+  assert_eq(bm.min(), Some(100U))
+  assert_eq(bm.max(), Some(199U))
+}
+
+///|
+test "min and max on a bitmap container" {
+  let values = []
+  for i = 0; i < 16384; i = i + 2 {
+    values.push(i.reinterpret_as_uint())
+  }
+  let bm = RoaringBitmap::from_array(values)
+  assert_eq(bm.get_stats().bitmap_containers, 1)
+  assert_eq(bm.min(), Some(0U))
+  assert_eq(bm.max(), Some(16382U))
+}
+
+// ============ Bucket insertion order ============
+
+///|
+test "add inserts a new bucket before an existing higher one" {
+  let bm = RoaringBitmap::singleton(200000U).add(5U)
+  assert_eq(bm.to_array(), [5U, 200000U])
+  assert_eq(bm.get_stats().total_containers, 2)
+}
+
+///|
+test "add_many merges into an already-existing bucket" {
+  let bm = RoaringBitmap::from_array([1U, 2U]).add_many([3U, 4U, 100U])
+  assert_eq(bm.to_array(), [1U, 2U, 3U, 4U, 100U])
+}
+
+///|
+test "add_many creates a bucket ahead of existing higher buckets" {
+  let bm = RoaringBitmap::from_array([200000U]).add_many([5U, 6U])
+  assert_eq(bm.to_array(), [5U, 6U, 200000U])
+}
+
 // ============ Multi-way set operations ============
 
 ///|
