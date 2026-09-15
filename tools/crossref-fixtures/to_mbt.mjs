@@ -26,7 +26,8 @@ function valuesArrayLiteral(values) {
 
 let out = `// Golden cross-language fixtures generated from roaring-wasm (official
 // CRoaring WASM port), NOT hand-written. Regenerate via:
-//   cd scratch-fixtures && node generate.mjs && node to_mbt.mjs
+//   cd tools/crossref-fixtures && npm install && npm run generate
+// then run \`moon fmt\` (the generator emits unformatted long literals).
 // These verify byte-for-byte compatibility with real CRoaring output, not
 // just internal round-trip consistency.
 
@@ -50,5 +51,7 @@ for (const [name, f] of Object.entries(fixtures)) {
   out += `}\n\n`;
 }
 
-writeFileSync("../golden_fixtures_test.mbt", out);
-console.log("Wrote golden_fixtures_test.mbt (" + out.length + " bytes)");
+// Two levels up: this script lives in tools/crossref-fixtures/, the test
+// file belongs in the project root alongside the other _test.mbt files.
+writeFileSync("../../golden_fixtures_test.mbt", out);
+console.log("Wrote ../../golden_fixtures_test.mbt (" + out.length + " bytes)");

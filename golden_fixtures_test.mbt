@@ -1,6 +1,7 @@
 // Golden cross-language fixtures generated from roaring-wasm (official
 // CRoaring WASM port), NOT hand-written. Regenerate via:
-//   cd scratch-fixtures && node generate.mjs && node to_mbt.mjs
+//   cd tools/crossref-fixtures && npm install && npm run generate
+// then run `moon fmt` (the generator emits unformatted long literals).
 // These verify byte-for-byte compatibility with real CRoaring output, not
 // just internal round-trip consistency.
 
