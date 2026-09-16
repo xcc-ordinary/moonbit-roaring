@@ -1,5 +1,7 @@
 # moonbit-roaring
 
+[English](README.md) | [简体中文](README.zh-CN.md)
+
 A RoaringBitmap implementation for MoonBit with true run-length optimization and official portable serialization format.
 
 **Status**: Core, serialization, range operations, lazy iteration, and rank/select are implemented and tested (120 tests passing). Built for the MoonBit Hackathon Sept 2026.  
@@ -12,8 +14,8 @@ A RoaringBitmap implementation for MoonBit with true run-length optimization and
 
 This is a RoaringBitmap library that fills two critical gaps in the MoonBit ecosystem:
 
-1. **真正接入主流程的 Run-length 容器优化** — 不是死代码,而是在 `add()`, `union()` 等核心操作中真正触发的自动压缩
-2. **与 CRoaring 兼容的官方可移植序列化格式** — 可以与 Java/C++/Go/Rust/Python 的 RoaringBitmap 实现互通数据
+1. **Run-length container optimization actually wired into the main path** — not dead code, but a real, triggered compression path inside `add()`, `union()`, and the other core operations
+2. **An official portable serialization format compatible with CRoaring** — lets you exchange data with RoaringBitmap implementations in Java/C++/Go/Rust/Python
 
 ### Why This Matters
 
