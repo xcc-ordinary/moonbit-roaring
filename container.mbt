@@ -8,8 +8,7 @@
 // outcome instead of dead code: `optimize_container` is on every mutation path,
 // not an unused helper. The tradeoff is O(n) work per mutation instead of
 // specialized per-type-pair fast paths (e.g. word-level bitmap union); that is
-// an intentional correctness-first choice for this project's timeline. See
-// docs/design.md for the rationale and future optimization ideas.
+// an intentional correctness-first choice for this project's timeline.
 
 // ============ UInt32 <-> (high16, low16) ============
 
