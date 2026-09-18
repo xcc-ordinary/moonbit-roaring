@@ -1,0 +1,79 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "xcc-ordinary/moonbit-roaring"
+
+import {
+  "moonbitlang/core/debug",
+}
+
+// Values
+pub let array_container_max_size : Int
+
+pub let bitmap_container_size_bytes : Int
+
+pub let run_container_min_run_length : Int
+
+// Errors
+
+// Types and methods
+type HighContainer derive(Eq)
+
+pub struct RoaringBitmap {
+  containers : Array[HighContainer]
+  size : Int
+} derive(Eq)
+pub fn RoaringBitmap::add(Self, UInt) -> Self
+pub fn RoaringBitmap::add_many(Self, Array[UInt]) -> Self
+pub fn RoaringBitmap::add_range(Self, UInt, UInt) -> Self
+pub fn RoaringBitmap::clear(Self) -> Self
+pub fn RoaringBitmap::contains(Self, UInt) -> Bool
+pub fn RoaringBitmap::contains_range(Self, UInt, UInt) -> Bool
+pub fn RoaringBitmap::deserialize(Bytes) -> Result[Self, RoaringError]
+pub fn RoaringBitmap::difference(Self, Self) -> Self
+pub fn RoaringBitmap::equals(Self, Self) -> Bool
+pub fn RoaringBitmap::from_array(Array[UInt]) -> Self
+pub fn RoaringBitmap::from_range(UInt, UInt) -> Self
+pub fn RoaringBitmap::get_stats(Self) -> RoaringStats
+pub fn RoaringBitmap::intersect(Self, Self) -> Self
+pub fn RoaringBitmap::intersect_all(Array[Self]) -> Self
+pub fn RoaringBitmap::is_empty(Self) -> Bool
+pub fn RoaringBitmap::is_subset(Self, Self) -> Bool
+pub fn RoaringBitmap::iter(Self) -> Iter[UInt]
+pub fn RoaringBitmap::jaccard_similarity(Self, Self) -> Double
+pub fn RoaringBitmap::max(Self) -> UInt?
+pub fn RoaringBitmap::min(Self) -> UInt?
+pub fn RoaringBitmap::new() -> Self
+pub fn RoaringBitmap::range(Self, UInt, UInt) -> Self
+pub fn RoaringBitmap::rank(Self, UInt) -> Int
+pub fn RoaringBitmap::remove(Self, UInt) -> Self
+pub fn RoaringBitmap::remove_range(Self, UInt, UInt) -> Self
+pub fn RoaringBitmap::select(Self, Int) -> UInt?
+pub fn RoaringBitmap::serialize(Self) -> Bytes
+pub fn RoaringBitmap::singleton(UInt) -> Self
+pub fn RoaringBitmap::size(Self) -> Int
+pub fn RoaringBitmap::to_array(Self) -> Array[UInt]
+pub fn RoaringBitmap::union(Self, Self) -> Self
+pub fn RoaringBitmap::union_all(Array[Self]) -> Self
+pub fn RoaringBitmap::xor(Self, Self) -> Self
+
+pub enum RoaringError {
+  DeserializationError(String)
+} derive(Eq, @debug.Debug)
+pub impl Show for RoaringError
+
+pub struct RoaringStats {
+  total_containers : Int
+  array_containers : Int
+  bitmap_containers : Int
+  run_containers : Int
+  total_bytes_used : Int
+  compression_ratio : Double
+} derive(@debug.Debug)
+
+pub struct Run {
+  start : UInt16
+  length : UInt16
+} derive(Eq, @debug.Debug)
+
+// Type aliases
+
+// Traits

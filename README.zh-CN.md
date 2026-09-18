@@ -57,7 +57,15 @@ let count_at_or_below_500 = restored.rank(500U)
 let fifth = restored.select(4)
 ```
 
-用 `moon run examples/inverted_index` 运行倒排索引示例。
+三个可运行用户路径：
+
+```bash
+moon run examples/inverted_index
+moon run examples/portable_window
+moon run examples/analytics
+```
+
+它们分别演示倒排索引查询、时间窗口的 portable 交接，以及 bitmap 级累计/顺序分析。
 
 ## 已实现能力
 

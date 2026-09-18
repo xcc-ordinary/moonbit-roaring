@@ -62,7 +62,16 @@ let count_at_or_below_500 = restored.rank(500U)
 let fifth = restored.select(4)
 ```
 
-Run the inverted-index example with `moon run examples/inverted_index`.
+Runnable user paths:
+
+```bash
+moon run examples/inverted_index
+moon run examples/portable_window
+moon run examples/analytics
+```
+
+They demonstrate postings-list queries, a portable time-window handoff, and
+bitmap-level cumulative/order analytics respectively.
 
 ## Implemented surface
 

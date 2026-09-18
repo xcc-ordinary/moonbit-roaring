@@ -6,5 +6,6 @@ target/
 target
 .mooncakes/
 .moonagent/
-pkg.generated.mbti
+**/pkg.generated.mbti
+!/pkg.generated.mbti
 申报书.md

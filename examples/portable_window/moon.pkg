@@ -1,0 +1,5 @@
+import {
+  "xcc-ordinary/moonbit-roaring" @roaring,
+}
+
+pkgtype(kind: "executable")

@@ -1,7 +1,7 @@
 # `moonbit-roaring` 与 `kesmeey/RoaringBitmap` 竞品证据对照
 
-> 调研日期：2026-09-17  
-> 对照版本：`moonbit-roaring` 当前 `master`（实施更新 2026-09-18）；`kesmeey/RoaringBitmap` [`f19c497`](https://github.com/kesmeey/RoaringBitmap/tree/f19c4977512aa120cd1add61e32f9dec36bd3102)。  
+> 调研日期：2026-09-17；实施更新：2026-09-18
+> 对照版本：`moonbit-roaring` `92fb41b6a98bf8b22f831bbead0124806961b8fc`；`kesmeey/RoaringBitmap` [`f19c497`](https://github.com/kesmeey/RoaringBitmap/tree/f19c4977512aa120cd1add61e32f9dec36bd3102)。
 > 证据范围：两个仓库的源代码、测试、README、GitHub 发布记录，MoonBit 官方文档，以及 Roaring 官方格式规范/CRoaring。没有把二手文章或项目自述当作唯一证据。
 
 ## 结论先行
@@ -10,7 +10,7 @@
 
 > **面向跨语言数据交换、持久化和连续区间工作负载的 MoonBit Roaring 互操作实现。**它在已有库的内存集合能力之外，补齐 Roaring 官方 portable wire format、可达的 Run 自动选型、区间写入、惰性迭代、bitmap 级 rank/select 和多路聚合，并以 CRoaring 生成的 golden fixtures 验证字节兼容性。
 
-这个价值主张是成立的，但当前证据还不足以支持“production-ready”或“high-performance”：项目没有吞吐基准，核心集合运算会先把容器完整解码为数组再重建；portable 测试也尚未接入官方规范仓库要求的最小 `testdata`。复审材料应主动承认这些边界，并在 9 月 24 日前补齐后文列出的证据包。
+这个价值主张已经有官方 testdata、严格格式校验、三目标 CI 和吞吐基线支撑，但仍不足以支持“production-ready”或“性能优于已有库”：核心集合运算会先把容器完整解码为数组再重建，native 目标未验证，Mooncakes 发布也仍需完成。复审材料应主动承认这些边界。
 
 ## 一、逐项对照
 
@@ -31,7 +31,7 @@
 | 当前 MoonBit 兼容性 | 2026-09-17 使用 `moon 0.1.20260904` 复测，因 `fn array_insert_at[T]` 等旧泛型语法发生 parse error；对应源码见[370 行](https://github.com/kesmeey/RoaringBitmap/blob/f19c4977512aa120cd1add61e32f9dec36bd3102/src/RoaringBitmap.mbt#L370-L405)。MoonBit 官方当前语法是 `fn[T] f`，见[官方方法/泛型示例](https://docs.moonbitlang.com/en/latest/language/methods.html)。 | 同一工具链在 wasm、wasm-gc、js 均通过 131/131，并加入 GitHub Actions。 | 当前可构建性是实际维护价值，但要附日期和工具链版本，不能把一次环境复测描述成永久事实。 |
 | 算法/潜在性能 | Array/Bitmap/Run 的多种组合有专用运算路径，例如 bitmap×bitmap 直接位运算；见[container set operations](https://github.com/kesmeey/RoaringBitmap/blob/f19c4977512aa120cd1add61e32f9dec36bd3102/src/RoaringBitmap.mbt#L455-L537)。 | 为保证统一选型，当前 add/remove 和四种集合运算会先把容器转成排序数组，再执行操作并重选容器；见[实现](https://github.com/xcc-ordinary/moonbit-roaring/blob/4aa7305eadbe94d733654f4cc62fe401d32a57a1/container.mbt#L404-L448)。 | 在没有实测前，不能声称本项目整体更快；在大 Bitmap 或重复单点写入上，本项目可能更慢。近期必须补基准并逐步引入直接容器算法。 |
 | 性能基准 | README 列复杂度，但仓库未发现可运行 benchmark；见[README 性能表](https://github.com/kesmeey/RoaringBitmap/blob/f19c4977512aa120cd1add61e32f9dec36bd3102/README.md#L253-L263)。 | 已提交 MoonBit benchmark，覆盖构建、contains、union/intersect 和序列化，记录 release/wasm 基线与复现命令，见[结果](https://github.com/xcc-ordinary/moonbit-roaring/blob/master/docs/benchmarks.md)。 | 只作为本项目回归基线，不据此声称优于已有库。 |
-| 发布成熟度 | 已在 Mooncakes 发布 `0.1.0`，安装页为 [`kesmeey/RoaringBitmap@0.1.0`](https://mooncakes.io/docs/kesmeey/RoaringBitmap)；GitHub 无 tag/release，见[tags](https://github.com/kesmeey/RoaringBitmap/tags)与[releases](https://github.com/kesmeey/RoaringBitmap/releases)。仓库主分支仅 3 个 commits，GitHub API 显示最后 push 为 2025-06-25；[commit 历史](https://github.com/kesmeey/RoaringBitmap/commits/main/)。 | 尚未在 Mooncakes 发布，GitHub 也无 tag/release，见[tags](https://github.com/xcc-ordinary/moonbit-roaring/tags)与[releases](https://github.com/xcc-ordinary/moonbit-roaring/releases)。 | 已有库目前发布成熟度更高；本项目要把发布、版本、CI、兼容性承诺做成复审证据，而非只写 roadmap。 |
+| 发布成熟度 | 已在 Mooncakes 发布 `0.1.0`，安装页为 [`kesmeey/RoaringBitmap@0.1.0`](https://mooncakes.io/docs/kesmeey/RoaringBitmap)；GitHub 无 tag/release，见[tags](https://github.com/kesmeey/RoaringBitmap/tags)与[releases](https://github.com/kesmeey/RoaringBitmap/releases)。 | 已发布 GitHub [`v0.1.0`](https://github.com/xcc-ordinary/moonbit-roaring/releases/tag/v0.1.0) 并有三目标 CI；Mooncakes 尚待账号授权后发布。 | 已有库目前仍多一项 Mooncakes 可安装证据；这是本项目复审前的最后阻断项。 |
 | 许可证 | [Apache-2.0](https://github.com/kesmeey/RoaringBitmap/blob/f19c4977512aa120cd1add61e32f9dec36bd3102/LICENSE)。 | [Apache-2.0](https://github.com/xcc-ordinary/moonbit-roaring/blob/4aa7305eadbe94d733654f4cc62fe401d32a57a1/LICENSE)。CRoaring 也是 [Apache-2.0](https://github.com/RoaringBitmap/CRoaring/blob/master/LICENSE)。 | 许可证不存在差异或阻碍；也为后续复用/对齐 CRoaring 测试资产提供兼容基础，但仍须遵守 NOTICE/归属要求。 |
 
 ## 二、为什么 portable interoperability 足以构成“必要性”
@@ -47,29 +47,29 @@ Roaring 不只是内存压缩算法，也是一种跨实现的数据格式。官
 
 这不是同一 API 的重复实现，而是已有库未提供的系统边界能力。复审应把它列为主价值，Run 自动选型、range mutation、lazy query 列为次价值。
 
-## 三、当前证据的不足与不可证实项
+## 三、当前证据边界与不可证实项
 
-以下内容截至上述固定提交无法证实，申报书不应写成既成事实：
+以下内容截至 `92fb41b6a98bf8b22f831bbead0124806961b8fc` 仍无法证实，申报书不应写成既成事实：
 
-- **无法证明本项目整体性能更高。**没有 benchmark；源码还显示其通用容器运算存在全量数组化成本。
-- **无法证明完整通过 RoaringFormatSpec conformance。**已有 6 组 CRoaring-port golden fixture，但还未接入官方规范要求的两个 `testdata`，也没有 fuzz/differential test 全量结果。
-- **无法证明所有语言实现都已实测互通。**当前证据来自同一个 CRoaring WASM port，不等于已经分别跑过 Java、Go、Rust、Python。
-- **无法证明恶意输入下完整安全。**截断前缀测试证明了长度检查的一部分，但反序列化器目前没有展示对 key 严格递增、cardinality 与 payload 一致、offset 合法性等全部不变量的验证。
+- **无法证明本项目整体性能更高。**已有本项目回归 benchmark，但没有与对方进行同机、同数据、同模式的对称比较；源码还显示通用容器运算存在全量数组化成本。
+- **不能把有限 conformance 样本等同于形式化完备。**已通过官方规范要求的两个 testdata，并校验 key、offset、cardinality、array/run 顺序和尾随字节；但尚无 fuzz/differential test 全量结果。
+- **无法证明所有语言实现都已实测互通。**当前证据是官方 Java 生成 testdata 的双向逐字节 round-trip，以及第三方 CRoaring-based WASM fixture；不等于已经分别跑过 Go、Rust、Python。
+- **无法证明任意恶意输入下绝对安全。**当前已覆盖截断前缀和主要语义不变量，但不能把有限测试写成安全性证明。
 - **无法证明 native target 可用。**项目 README 已说明 native 未验证；不要在复审表中笼统写“全平台”。
-- **无法证明项目发布成熟。**尚未发布 Mooncakes 版本、tag 或 GitHub release。
+- **Mooncakes 安装尚不可证明。**GitHub `v0.1.0` release 和 CI 已公开，但 Mooncakes 登录/发布及全新项目 `moon add` 验证尚未完成。
 - **不能把 `roaring-wasm` 写成官方组织发布。**它是第三方 port；可验证的是它基于 CRoaring 并生成了本项目的 fixtures。
 - **不能说已有库没有 Run、range、iteration 或 rank 代码。**准确差异分别是：Run 未由公开 mutation 路径自动选中；只有范围筛选而无范围 mutation；只有 callback iteration；只有不可从公开 `RoaringBitmap` 调用的 container-level rank/get-at。
 
-## 四、9 月 24 日前最值得补的复审证据
+## 四、复审证据完成状态
 
 按说服力排序：
 
-1. **官方 conformance testdata**：把 [RoaringFormatSpec/testdata](https://github.com/RoaringBitmap/RoaringFormatSpec/tree/master/testdata) 的最小规定样本纳入自动测试，证明不是只匹配自制 6 个案例。
-2. **双向外部互操作脚本**：在 CI 中执行 CRoaring/Java/Go → MoonBit deserialize，以及 MoonBit serialize → 外部实现 deserialize；发布日志保留工具版本、SHA 与输出摘要。
-3. **对称、可复现 benchmark**：固定 MoonBit 版本、机器、数据集和 warm-up，比较 sparse、dense、runs、mixed、跨 bucket 的 add_many/contains/union/intersect/serialize/deserialize。必须同时呈现本项目胜负项；不要只挑赢家。
-4. **当前 MoonBit CI**：至少 wasm、wasm-gc、js 三 target 运行 `moon check`/`moon test`，并固定本次提交 badge。已有库在当前工具链的 parse failure 可作为维护动机，而不是攻击性文案。
-5. **发布证据**：发布 Mooncakes `0.1.0`、Git tag/release，写清 portable-only、32-bit、非线程安全/不可变 API、native 未验证等边界。
-6. **兼容性矩阵与迁移页**：逐项列 `kesmeey/RoaringBitmap` 与本项目 API 映射，承认对方的 Jaccard/范围筛选优势，并给出从 `to_array` 迁移或 portable 数据交换方案。这比泛泛说“更强”更像生态互补。
+1. **已完成：官方 conformance testdata**。两个最小规定样本已纳入自动测试，来源提交和 SHA-256 已固定。
+2. **已完成核心双向证据**。官方 Java 生成文件可被 MoonBit 读取，MoonBit 重编码后逐字节一致；可选增强是再启动 Java/Go/C 进程读取 MoonBit 新生成文件。
+3. **已完成本项目回归 benchmark**。固定 MoonBit 版本、机器、数据集和 release/wasm 模式；尚未做与已有库的对称性能比较，因此不宣称胜出。
+4. **已完成当前 MoonBit CI**。wasm、wasm-gc、js 三 target 运行 `moon check`/`moon test`，同时验证格式与 fixture 可复现性。
+5. **部分完成：发布证据**。Git tag/release `v0.1.0` 已完成；Mooncakes 发布与全新项目安装验证仍待本人完成 OAuth 登录。
+6. **已完成兼容性矩阵与迁移 API**。公平承认重叠，并补齐 `clear`、Jaccard 和闭区间 `range`。
 7. **修正项目文案（已完成）**：README 已把 `roaring-wasm` 准确标为第三方 CRoaring-based WASM 包，删除 `production-ready/high-performance`，并公开边界。
 8. **性能架构路线**：保留统一的最小字节容器选型，但把 bitmap×bitmap、run×run 等高频组合改为直接容器算法，避免每次全量转数组；以 benchmark 驱动，不作空泛承诺。
 
@@ -82,7 +82,7 @@ Roaring 不只是内存压缩算法，也是一种跨实现的数据格式。官
 复测环境：Windows，2026-09-17，`moon 0.1.20260904 (94521db)`、`moonc v0.10.12+1634b282e`。
 
 ```text
-# moonbit-roaring @ 4aa7305
+# moonbit-roaring @ 92fb41b6a98bf8b22f831bbead0124806961b8fc
 moon test
 Total tests: 131, passed: 131, failed: 0.
 
@@ -97,7 +97,7 @@ unexpected `fn f[T]`, you may expect `fn[T] f`
 ```powershell
 git clone https://github.com/xcc-ordinary/moonbit-roaring.git
 Set-Location moonbit-roaring
-git checkout 4aa7305eadbe94d733654f4cc62fe401d32a57a1
+git checkout 92fb41b6a98bf8b22f831bbead0124806961b8fc
 moon test
 
 git clone https://github.com/kesmeey/RoaringBitmap.git
