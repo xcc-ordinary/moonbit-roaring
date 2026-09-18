@@ -40,8 +40,7 @@ A source-linked, fair comparison is in
 moon add xcc-ordinary/moonbit-roaring
 ```
 
-Until the Mooncakes package is published, depend on the Git repository or clone
-this repository to run the examples and tests.
+Published package: [`xcc-ordinary/moonbit-roaring@0.1.0`](https://mooncakes.io/docs/xcc-ordinary/moonbit-roaring). A clean-project smoke test verifies download, compilation, and portable round-trip behavior on `wasm`, `wasm-gc`, and `js`.
 
 ## Example
 

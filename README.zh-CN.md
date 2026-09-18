@@ -36,7 +36,7 @@ Array/Bitmap/Run 三种容器间选择，并实现 Roaring portable 二进制格
 moon add xcc-ordinary/moonbit-roaring
 ```
 
-在 Mooncakes 正式发布前，可先使用 Git 仓库依赖，或克隆仓库运行示例与测试。
+已发布：[`xcc-ordinary/moonbit-roaring@0.1.0`](https://mooncakes.io/docs/xcc-ordinary/moonbit-roaring)。已在全新项目中完成真实下载、编译及 portable 往返测试，`wasm`、`wasm-gc`、`js` 三个目标均通过。
 
 ## 示例
 

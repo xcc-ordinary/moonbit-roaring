@@ -16,7 +16,7 @@
 | 维度 | `kesmeey/RoaringBitmap` | `xcc-ordinary/moonbit-roaring` | 对复审的意义 |
 | --- | --- | --- | --- |
 | 基础 32 位整数集合与四则集合运算 | 已实现 | 已实现 | 这是重叠部分，不能当作本项目创新点 |
-| Mooncakes 发布 | 已发布 `0.1.0` | 尚未发布 | 本项目必须在复审前补齐 |
+| Mooncakes 发布 | 已发布 `0.1.0` | 已发布 [`0.1.0`](https://mooncakes.io/docs/xcc-ordinary/moonbit-roaring)，并从全新项目完成三目标安装测试 | 双方都有可安装版本，本项目另有 GitHub Release 与公开 CI |
 | 当前 MoonBit 工具链 | 在 `moon 0.1.20260904` 下因旧泛型语法出现 3 个解析错误，测试无法启动 | 同一工具链下可运行 | 证明本项目提供当前生态可直接使用的实现 |
 | Run 容器 | 定义了 Run 相关代码和公开 `optimize_container`，但该函数只有定义、没有调用点；`add` 主路径只做 Array/Bitmap 转换 | 每个核心变更路径最终按字节成本重新选择 Array/Bitmap/Run | 证明连续数据压缩不是声明能力，而是实际生效的行为 |
 | Portable 序列化 | 未找到 `serialize`/`deserialize`/字节格式实现 | 实现 Roaring portable 格式读写 | 这是最强的互补点：MoonBit 可进入跨语言 Roaring 数据链路 |
@@ -115,14 +115,11 @@ Roaring 的价值不仅是压缩算法，还在于统一的 portable 数据格�
 
 > 我们已重新核查 MoonBit 生态中的 `kesmeey/RoaringBitmap@0.1.0`。该项目已经实现 32 位整数集合、Array/Bitmap/Run 三类容器定义以及并、交、差、异或等基础能力；我们尊重并明确承认这部分先行工作。`moonbit-roaring` 的申报价值不在重复这些基础 API，而在补齐三个尚未被满足、且可独立验证的生态需求。第一，现有项目没有实现 Roaring 官方 portable 序列化格式，本项目按 `RoaringFormatSpec` 实现读写，并直接读取官方 Java 实现生成的 testdata、验证集合内容后逐字节重新编码，使 MoonBit 能进入跨语言 Roaring 数据链路。第二，现有项目虽定义了 Run 优化函数，但在其当前源码中该函数没有调用点，常规 `add/from_array` 路径只在 Array 与 Bitmap 间转换；本项目把按字节成本选择 Array/Bitmap/Run 的逻辑接入 add、remove 和全部集合运算，并用容器统计与连续区间测试证明 Run 实际生效。第三，现有项目当前提交在 `moon 0.1.20260904` 下会因旧泛型语法出现解析错误，本项目在同一工具链的 wasm、wasm-gc、js 三个目标上通过 131 项测试，并用 CI 持续验证格式、接口与 fixture 可复现性。除此之外，本项目增加严格反序列化、区间构造与修改、惰性迭代、bitmap 级 rank/select、多路集合运算，并补齐 `clear`、Jaccard 和闭区间筛选等迁移 API。我们的定位是标准互操作、当前可维护的扩展实现，而不是否认或简单复制已有项目；后续也愿意向原项目共享格式 fixture 与兼容性问题报告。
 
-## 复审前的剩余阻断项
+## 复审前完成状态
 
-以下项目未完成前，不建议立即重新提交：
+原阻断项已在 2026-09-18 全部落地：Mooncakes `0.1.0` 发布与全新项目安装验证、GitHub Release、真实 CI、官方 testdata、严格错误输入校验、兼容 API、可复现 benchmark，以及 `Interoperability-focused` 的克制定位。
 
-1. **发布到 Mooncakes**：发布前本项目仍无法通过 `moon add xcc-ordinary/moonbit-roaring` 安装；必须完成发布并从全新临时项目验证安装。
-2. **可选增强：真正的跨进程双向验证**：目前已经直接使用官方 Java 生成的 `RoaringFormatSpec/testdata` 并逐字节往返；若时间允许，再加入 CRoaring/Java/Go 进程读取 MoonBit 输出，会形成更强的双向证据。
-
-以下原阻断项已在 2026-09-18 落地：真实 CI、官方 testdata、严格恶意输入校验、兼容 API、可复现 benchmark，以及 `Interoperability-focused` 的克制定位。
+仍可继续增强但不阻断复审：启动 CRoaring/Java/Go 独立进程读取 MoonBit 新生成文件，形成除官方 Java fixture 双向逐字节往返之外的第二套跨进程证据。
 
 ## 9 月 17 日至 24 日执行顺序
 

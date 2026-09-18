@@ -31,7 +31,7 @@
 | 当前 MoonBit 兼容性 | 2026-09-17 使用 `moon 0.1.20260904` 复测，因 `fn array_insert_at[T]` 等旧泛型语法发生 parse error；对应源码见[370 行](https://github.com/kesmeey/RoaringBitmap/blob/f19c4977512aa120cd1add61e32f9dec36bd3102/src/RoaringBitmap.mbt#L370-L405)。MoonBit 官方当前语法是 `fn[T] f`，见[官方方法/泛型示例](https://docs.moonbitlang.com/en/latest/language/methods.html)。 | 同一工具链在 wasm、wasm-gc、js 均通过 131/131，并加入 GitHub Actions。 | 当前可构建性是实际维护价值，但要附日期和工具链版本，不能把一次环境复测描述成永久事实。 |
 | 算法/潜在性能 | Array/Bitmap/Run 的多种组合有专用运算路径，例如 bitmap×bitmap 直接位运算；见[container set operations](https://github.com/kesmeey/RoaringBitmap/blob/f19c4977512aa120cd1add61e32f9dec36bd3102/src/RoaringBitmap.mbt#L455-L537)。 | 为保证统一选型，当前 add/remove 和四种集合运算会先把容器转成排序数组，再执行操作并重选容器；见[实现](https://github.com/xcc-ordinary/moonbit-roaring/blob/4aa7305eadbe94d733654f4cc62fe401d32a57a1/container.mbt#L404-L448)。 | 在没有实测前，不能声称本项目整体更快；在大 Bitmap 或重复单点写入上，本项目可能更慢。近期必须补基准并逐步引入直接容器算法。 |
 | 性能基准 | README 列复杂度，但仓库未发现可运行 benchmark；见[README 性能表](https://github.com/kesmeey/RoaringBitmap/blob/f19c4977512aa120cd1add61e32f9dec36bd3102/README.md#L253-L263)。 | 已提交 MoonBit benchmark，覆盖构建、contains、union/intersect 和序列化，记录 release/wasm 基线与复现命令，见[结果](https://github.com/xcc-ordinary/moonbit-roaring/blob/master/docs/benchmarks.md)。 | 只作为本项目回归基线，不据此声称优于已有库。 |
-| 发布成熟度 | 已在 Mooncakes 发布 `0.1.0`，安装页为 [`kesmeey/RoaringBitmap@0.1.0`](https://mooncakes.io/docs/kesmeey/RoaringBitmap)；GitHub 无 tag/release，见[tags](https://github.com/kesmeey/RoaringBitmap/tags)与[releases](https://github.com/kesmeey/RoaringBitmap/releases)。 | 已发布 GitHub [`v0.1.0`](https://github.com/xcc-ordinary/moonbit-roaring/releases/tag/v0.1.0) 并有三目标 CI；Mooncakes 尚待账号授权后发布。 | 已有库目前仍多一项 Mooncakes 可安装证据；这是本项目复审前的最后阻断项。 |
+| 发布成熟度 | 已在 Mooncakes 发布 `0.1.0`，安装页为 [`kesmeey/RoaringBitmap@0.1.0`](https://mooncakes.io/docs/kesmeey/RoaringBitmap)；GitHub 无 tag/release，见[tags](https://github.com/kesmeey/RoaringBitmap/tags)与[releases](https://github.com/kesmeey/RoaringBitmap/releases)。 | 已发布 [Mooncakes `0.1.0`](https://mooncakes.io/docs/xcc-ordinary/moonbit-roaring) 和 GitHub [`v0.1.0`](https://github.com/xcc-ordinary/moonbit-roaring/releases/tag/v0.1.0)，并从全新项目完成三目标安装测试。 | 两者均可安装；本项目额外提供公开 Release、三目标 CI 和安装后 portable round-trip 证据。 |
 | 许可证 | [Apache-2.0](https://github.com/kesmeey/RoaringBitmap/blob/f19c4977512aa120cd1add61e32f9dec36bd3102/LICENSE)。 | [Apache-2.0](https://github.com/xcc-ordinary/moonbit-roaring/blob/4aa7305eadbe94d733654f4cc62fe401d32a57a1/LICENSE)。CRoaring 也是 [Apache-2.0](https://github.com/RoaringBitmap/CRoaring/blob/master/LICENSE)。 | 许可证不存在差异或阻碍；也为后续复用/对齐 CRoaring 测试资产提供兼容基础，但仍须遵守 NOTICE/归属要求。 |
 
 ## 二、为什么 portable interoperability 足以构成“必要性”
@@ -56,7 +56,7 @@ Roaring 不只是内存压缩算法，也是一种跨实现的数据格式。官
 - **无法证明所有语言实现都已实测互通。**当前证据是官方 Java 生成 testdata 的双向逐字节 round-trip，以及第三方 CRoaring-based WASM fixture；不等于已经分别跑过 Go、Rust、Python。
 - **无法证明任意恶意输入下绝对安全。**当前已覆盖截断前缀和主要语义不变量，但不能把有限测试写成安全性证明。
 - **无法证明 native target 可用。**项目 README 已说明 native 未验证；不要在复审表中笼统写“全平台”。
-- **Mooncakes 安装尚不可证明。**GitHub `v0.1.0` release 和 CI 已公开，但 Mooncakes 登录/发布及全新项目 `moon add` 验证尚未完成。
+- **发布证据的边界。**Mooncakes `0.1.0`、GitHub Release、全新项目下载和三目标 portable round-trip 均已完成；这些证明可安装与可运行，不等同于长期生产稳定性承诺。
 - **不能把 `roaring-wasm` 写成官方组织发布。**它是第三方 port；可验证的是它基于 CRoaring 并生成了本项目的 fixtures。
 - **不能说已有库没有 Run、range、iteration 或 rank 代码。**准确差异分别是：Run 未由公开 mutation 路径自动选中；只有范围筛选而无范围 mutation；只有 callback iteration；只有不可从公开 `RoaringBitmap` 调用的 container-level rank/get-at。
 
@@ -68,7 +68,7 @@ Roaring 不只是内存压缩算法，也是一种跨实现的数据格式。官
 2. **已完成核心双向证据**。官方 Java 生成文件可被 MoonBit 读取，MoonBit 重编码后逐字节一致；可选增强是再启动 Java/Go/C 进程读取 MoonBit 新生成文件。
 3. **已完成本项目回归 benchmark**。固定 MoonBit 版本、机器、数据集和 release/wasm 模式；尚未做与已有库的对称性能比较，因此不宣称胜出。
 4. **已完成当前 MoonBit CI**。wasm、wasm-gc、js 三 target 运行 `moon check`/`moon test`，同时验证格式与 fixture 可复现性。
-5. **部分完成：发布证据**。Git tag/release `v0.1.0` 已完成；Mooncakes 发布与全新项目安装验证仍待本人完成 OAuth 登录。
+5. **已完成发布证据**。Mooncakes `0.1.0`、Git tag/release、全新项目 `moon add` 和三目标 portable round-trip 均已完成。
 6. **已完成兼容性矩阵与迁移 API**。公平承认重叠，并补齐 `clear`、Jaccard 和闭区间 `range`。
 7. **修正项目文案（已完成）**：README 已把 `roaring-wasm` 准确标为第三方 CRoaring-based WASM 包，删除 `production-ready/high-performance`，并公开边界。
 8. **性能架构路线**：保留统一的最小字节容器选型，但把 bitmap×bitmap、run×run 等高频组合改为直接容器算法，避免每次全量转数组；以 benchmark 驱动，不作空泛承诺。
