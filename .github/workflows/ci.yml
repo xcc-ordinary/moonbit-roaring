@@ -1,0 +1,57 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        target: [wasm, wasm-gc, js]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install MoonBit
+        run: |
+          curl -fsSL https://cli.moonbitlang.com/install/unix.sh | bash
+          echo "$HOME/.moon/bin" >> "$GITHUB_PATH"
+      - name: Toolchain
+        run: moon version --all
+      - name: Check generated interface and formatting
+        if: matrix.target == 'wasm'
+        run: |
+          moon info
+          moon fmt --check
+          git diff --exit-code
+      - name: Check and test
+        run: |
+          moon check -d --target ${{ matrix.target }}
+          moon test --target ${{ matrix.target }}
+
+  fixtures:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: tools/crossref-fixtures/package-lock.json
+      - name: Install MoonBit formatter
+        run: |
+          curl -fsSL https://cli.moonbitlang.com/install/unix.sh | bash
+          echo "$HOME/.moon/bin" >> "$GITHUB_PATH"
+      - name: Regenerate official-format fixtures
+        run: node tools/official-fixtures/generate.mjs
+      - name: Regenerate third-party cross-reference fixtures
+        working-directory: tools/crossref-fixtures
+        run: |
+          npm ci
+          npm run generate
+      - name: Format generated MoonBit tests
+        run: moon fmt
+      - name: Verify checked-in fixtures are reproducible
+        run: git diff --exit-code -- official_format_test.mbt golden_fixtures_test.mbt

@@ -78,12 +78,9 @@ fn write_container_data(buf : @buffer.Buffer, c : Container) -> Unit {
 
 ///|
 /// Serialize to the CRoaring-compatible portable binary format.
-/// The `portable` flag is accepted for API parity with CRoaring's
-/// serialize(portable); only the portable/interoperable format is
-/// implemented in this project (see README non-goals for the native/frozen
-/// format, which is future work).
-pub fn RoaringBitmap::serialize(self : RoaringBitmap, portable : Bool) -> Bytes {
-  ignore(portable)
+/// This project intentionally exposes only the interoperable format; native
+/// and frozen formats are separate future APIs rather than a boolean mode.
+pub fn RoaringBitmap::serialize(self : RoaringBitmap) -> Bytes {
   let containers = self.containers
   let size = containers.length()
   let buf = @buffer.Buffer::Buffer()
@@ -221,14 +218,39 @@ fn read_bitmap_container(data : Bytes, pos : Int) -> FixedArray[UInt64] {
 }
 
 ///|
+fn array_values_are_strictly_increasing(values : Array[UInt16]) -> Bool {
+  for i = 1; i < values.length(); i = i + 1 {
+    if values[i] <= values[i - 1] {
+      return false
+    }
+  }
+  true
+}
+
+///|
+fn runs_are_sorted_and_disjoint(runs : Array[Run]) -> Bool {
+  if runs.length() == 0 {
+    return false
+  }
+  let mut previous_end = -1
+  for run in runs {
+    let start = run.start.to_int()
+    let run_end = start + run.length.to_int()
+    if run_end > 65535 || start <= previous_end {
+      return false
+    }
+    previous_end = run_end
+  }
+  true
+}
+
+///|
 /// Deserialize from the CRoaring-compatible portable binary format.
 /// Rejects truncated or malformed input with a RoaringError rather than
 /// reading out of bounds.
 pub fn RoaringBitmap::deserialize(
   data : Bytes,
-  portable : Bool,
 ) -> Result[RoaringBitmap, RoaringError] {
-  ignore(portable)
   let parsed = match parse_cookie(data) {
     Ok(p) => p
     Err(e) => return Err(e)
@@ -250,6 +272,11 @@ pub fn RoaringBitmap::deserialize(
   for k = 0; k < size; k = k + 1 {
     let key = data.unsafe_read_uint16_le(pos)
     let card_minus1 = data.unsafe_read_uint16_le(pos + 2)
+    if k > 0 && key <= keys[k - 1] {
+      return Err(
+        DeserializationError("container keys must be strictly increasing"),
+      )
+    }
     keys.push(key)
     cardinalities.push(card_minus1.to_int() + 1)
     pos = pos + 4
@@ -257,9 +284,13 @@ pub fn RoaringBitmap::deserialize(
 
   // Offset header: present under the same rule used when writing.
   let has_offsets = !has_runs || size >= no_offset_threshold
+  let offsets : Array[UInt] = []
   if has_offsets {
     if !check_len(data, pos, 4 * size) {
       return Err(DeserializationError("truncated: offset header"))
+    }
+    for k = 0; k < size; k = k + 1 {
+      offsets.push(data.unsafe_read_uint32_le(pos + 4 * k))
     }
     pos = pos + 4 * size
   }
@@ -267,6 +298,9 @@ pub fn RoaringBitmap::deserialize(
   // Container data, in key order.
   let containers : Array[HighContainer] = []
   for k = 0; k < size; k = k + 1 {
+    if has_offsets && offsets[k] != pos.reinterpret_as_uint() {
+      return Err(DeserializationError("invalid container offset"))
+    }
     let cardinality = cardinalities[k]
     let is_run = has_runs && is_run_flag_set(run_flags, k)
     let container = if is_run {
@@ -285,6 +319,11 @@ pub fn RoaringBitmap::deserialize(
         runs.push(Run::{ start, length, })
         pos = pos + 4
       }
+      if !runs_are_sorted_and_disjoint(runs) {
+        return Err(
+          DeserializationError("run entries must be sorted and disjoint"),
+        )
+      }
       Run(runs)
     } else if cardinality <= array_container_max_size {
       if !check_len(data, pos, 2 * cardinality) {
@@ -292,6 +331,11 @@ pub fn RoaringBitmap::deserialize(
       }
       let arr = read_array_container(data, pos, cardinality)
       pos = pos + 2 * cardinality
+      if !array_values_are_strictly_increasing(arr) {
+        return Err(
+          DeserializationError("array values must be strictly increasing"),
+        )
+      }
       Array(arr)
     } else {
       if !check_len(data, pos, bitmap_container_size_bytes) {
@@ -301,11 +345,19 @@ pub fn RoaringBitmap::deserialize(
       pos = pos + bitmap_container_size_bytes
       Bitmap(words)
     }
+    if container_cardinality(container) != cardinality {
+      return Err(
+        DeserializationError("container cardinality does not match header"),
+      )
+    }
     containers.push(HighContainer::{
       key: keys[k],
       container,
       cardinality: container_cardinality(container),
     })
+  }
+  if pos != data.length() {
+    return Err(DeserializationError("trailing bytes after bitmap"))
   }
   let total = rebuild_size(containers)
   Ok({ containers, size: total, })

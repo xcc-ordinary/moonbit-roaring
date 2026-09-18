@@ -77,11 +77,11 @@ fn main {
   // Portability check: serialize to the CRoaring-compatible format and
   // read it back. In a real system this is what lets a Rust or Go service
   // consume the same postings list this MoonBit indexer produced.
-  let bytes = machine.serialize(true)
+  let bytes = machine.serialize()
   println(
     "Serialized \"machine\" postings to \{bytes.length()} bytes (portable format)",
   )
-  let restored = match @roaring.RoaringBitmap::deserialize(bytes, true) {
+  let restored = match @roaring.RoaringBitmap::deserialize(bytes) {
     Ok(r) => r
     Err(e) => {
       println("deserialize failed: \{e}")

@@ -1,7 +1,7 @@
 {
   "name": "crossref-fixtures",
   "version": "1.0.0",
-  "description": "Generates golden test fixtures from roaring-wasm (official CRoaring WASM port) to verify byte-for-byte serialization compatibility",
+  "description": "Generates golden test fixtures from the third-party roaring-wasm CRoaring port to verify byte-for-byte serialization compatibility",
   "private": true,
   "type": "module",
   "scripts": {

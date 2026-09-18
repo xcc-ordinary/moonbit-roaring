@@ -245,6 +245,15 @@ pub fn RoaringBitmap::is_empty(self : RoaringBitmap) -> Bool {
 }
 
 ///|
+/// Return an empty bitmap. This compatibility helper mirrors the established
+/// MoonBit RoaringBitmap API while preserving this package's immutable style:
+/// the receiver is not modified.
+pub fn RoaringBitmap::clear(self : RoaringBitmap) -> RoaringBitmap {
+  ignore(self)
+  RoaringBitmap::new()
+}
+
+///|
 /// Minimum element, if any
 pub fn RoaringBitmap::min(self : RoaringBitmap) -> UInt? {
   if self.containers.length() == 0 {
@@ -494,6 +503,44 @@ pub fn RoaringBitmap::is_subset(
   other : RoaringBitmap,
 ) -> Bool {
   self.intersect(other).size() == self.size
+}
+
+///|
+/// Jaccard similarity: |A ∩ B| / |A ∪ B|. Two empty sets are considered
+/// identical and therefore have similarity 1.0.
+pub fn RoaringBitmap::jaccard_similarity(
+  self : RoaringBitmap,
+  other : RoaringBitmap,
+) -> Double {
+  let union_size = self.union(other).size()
+  if union_size == 0 {
+    1.0
+  } else {
+    self.intersect(other).size().to_double() / union_size.to_double()
+  }
+}
+
+///|
+/// Keep only values in the inclusive interval `[start, end]`.
+///
+/// This deliberately matches `kesmeey/RoaringBitmap::range` for migration.
+/// For constructing or mutating half-open intervals, prefer `from_range`,
+/// `add_range`, and `remove_range`.
+pub fn RoaringBitmap::range(
+  self : RoaringBitmap,
+  start : UInt,
+  end : UInt,
+) -> RoaringBitmap {
+  if start > end {
+    return RoaringBitmap::new()
+  }
+  let selected : Array[UInt] = []
+  for value in self.to_array() {
+    if value >= start && value <= end {
+      selected.push(value)
+    }
+  }
+  RoaringBitmap::from_array(selected)
 }
 
 // ============ Serialization (CRoaring-compatible) ============

@@ -1,36 +1,38 @@
 # moonbit-roaring
 
+[![CI](https://github.com/xcc-ordinary/moonbit-roaring/actions/workflows/ci.yml/badge.svg)](https://github.com/xcc-ordinary/moonbit-roaring/actions/workflows/ci.yml)
+
 [English](README.md) | [简体中文](README.zh-CN.md)
 
-A RoaringBitmap implementation for MoonBit with true run-length optimization and official portable serialization format.
+An interoperability-focused RoaringBitmap implementation for MoonBit. It
+combines automatic Array/Bitmap/Run representation selection with the Roaring
+portable binary format.
 
-**Status**: Core, serialization, range operations, lazy iteration, and rank/select are implemented and tested (120 tests passing). Built for the MoonBit Hackathon Sept 2026.  
-**License**: Apache-2.0  
-**Target**: `wasm`, `wasm-gc`, `js` (verified); `native` unverified — the MoonBit runtime's own C sources fail to compile on Windows (`rand_s` implicit declaration in `runtime/env.c`), so this target has not been exercised here
+The project complements, rather than replaces,
+[`kesmeey/RoaringBitmap`](https://github.com/kesmeey/RoaringBitmap). That package
+established the core bitmap and set-operation API in MoonBit; this package
+focuses on portable-format interoperability, automatic run compression on the
+normal mutation path, strict decoding, and current-toolchain reproducibility.
 
----
+## Why another package?
 
-## What This Project Does
+The overlap is deliberate and documented: both packages provide 32-bit integer
+sets and standard set operations. The independently useful additions here are:
 
-This is a RoaringBitmap library that fills two critical gaps in the MoonBit ecosystem:
+- **Portable interoperability** — reads and writes the format specified by
+  [`RoaringFormatSpec`](https://github.com/RoaringBitmap/RoaringFormatSpec), so
+  MoonBit can participate in existing cross-language Roaring data pipelines.
+- **Run optimization on normal operations** — `add`, `remove`, range methods,
+  and all set operations reselect Array, Bitmap, or Run representation by
+  encoded byte cost.
+- **Defensive decoding** — rejects truncated input, invalid offsets, unordered
+  keys or arrays, overlapping runs, cardinality mismatches, and trailing bytes.
+- **Additional bitmap-level APIs** — half-open range construction/mutation,
+  lazy iteration, `rank`, `select`, multi-way operations, plus compatibility
+  helpers `clear`, inclusive `range`, and `jaccard_similarity`.
 
-1. **Run-length container optimization actually wired into the main path** — not dead code, but a real, triggered compression path inside `add()`, `union()`, and the other core operations
-2. **An official portable serialization format compatible with CRoaring** — lets you exchange data with RoaringBitmap implementations in Java/C++/Go/Rust/Python
-
-### Why This Matters
-
-RoaringBitmap is widely used in production systems (Lucene, ClickHouse, Spark, Druid) because:
-- It compresses sparse integer sets **up to 90% smaller** than naive bitmaps
-- It supports **fast set operations** (union, intersection) directly on compressed data
-- It has a **portable binary format** that works across languages
-
-As of 2026-09-14, the existing MoonBit implementation (`kesmeey/RoaringBitmap`, last pushed 2025-06-25) has the data structures but:
-- Run-length container optimization is **never triggered** — verified by grepping its source: `optimize_container` has zero call sites, and `container_add`/`container_union` only ever promote Array → Bitmap, never detect and collapse a consecutive run
-- **No serialization format** — no `serialize`/`deserialize`/`to_bytes`/`from_bytes` anywhere in its source, so it cannot exchange data with other languages
-
-This project delivers an interoperable RoaringBitmap for MoonBit that closes both gaps, verified against real CRoaring output rather than only against itself.
-
----
+A source-linked, fair comparison is in
+[`docs/competition/competitor-research.md`](docs/competition/competitor-research.md).
 
 ## Installation
 
@@ -38,198 +40,94 @@ This project delivers an interoperable RoaringBitmap for MoonBit that closes bot
 moon add xcc-ordinary/moonbit-roaring
 ```
 
----
+Until the Mooncakes package is published, depend on the Git repository or clone
+this repository to run the examples and tests.
 
-## Core Features
-
-### Phase 1: Three-Container Core
-- [x] ArrayContainer (sparse data, sorted `UInt16` array)
-- [x] BitmapContainer (dense data, 8KB bitmap)
-- [x] RunContainer (consecutive ranges, RLE encoding)
-- [x] **Auto-optimization hooks** in `add()`, `add_many()`, `remove()`, `union()`, `intersect()`, `difference()`, `xor()` — every mutation re-picks the cheapest of the three representations by byte cost
-- [x] Container conversion at the **4096-element threshold** (Array ↔ Bitmap tie-break) and at the run-vs-array cost crossover
-- [x] Range operations: `add_range`/`remove_range`/`contains_range`/`from_range` — a bucket fully covered by the range collapses to a single Run container in O(1), without decoding or looping over elements
-
-### Phase 2: Official Serialization Format
-- [x] `serialize(portable: Bool) -> Bytes` — output CRoaring-compatible binary
-- [x] `deserialize(data: Bytes, portable: Bool) -> Result[RoaringBitmap, RoaringError]`
-- [x] Round-trip tests: MoonBit → serialize → deserialize → MoonBit
-- [x] **Cross-language diff tests**: verify byte-level compatibility with `roaring-wasm` (CRoaring WASM port)
-
-### Phase 3: Query & Iteration
-- [x] `iter()` — lazy `Iter[UInt]` that decodes one bucket at a time, so `.take(n)`/`.find_first(f)` can stop early instead of paying for a full `to_array()` decode
-- [x] `rank(value)` / `select(index)` — CRoaring-style "how many elements ≤ x" / "the i-th smallest element", each implemented per-container without a full decode
-- [x] `union_all` / `intersect_all` — fold a list of bitmaps in one call (e.g. merging several search-term postings lists)
-
-### Phase 4: Verification & Polish
-- [x] 120 test cases covering all three container types, boundary/tie-break points, and the range/iteration APIs
-- [x] Bounds-checking property test: every truncated prefix of a serialized bitmap is rejected rather than read out of bounds
-- [x] Golden test suite with official CRoaring-generated fixtures
-- [x] Compression ratio verification (`get_stats()`, exercised in the example below)
-- [x] Example: runnable inverted-index demo (`examples/inverted_index`)
-- [ ] Performance benchmarks (throughput, not just byte-size compression ratio)
-- [ ] Publish to mooncakes.io
-
----
-
-## API Preview
+## Example
 
 ```moonbit
-// Create from sparse data → ArrayContainer
-let bitmap = @roaring.RoaringBitmap::from_array([1U, 100U, 1000U, 10000U])
+let sparse = @roaring.RoaringBitmap::from_array([1U, 100U, 1000U])
+let consecutive = @roaring.RoaringBitmap::from_range(0U, 10000U)
+let result = sparse.union(consecutive)
 
-// add_range auto-converts a whole bucket to a RunContainer in O(1) —
-// no per-element loop, no intermediate array of 10000 entries.
-let dense = @roaring.RoaringBitmap::from_range(0U, 10000U)
-// dense now uses RunContainer internally (a few bytes, not 8KB)
-
-// Serialize to official portable format
-let bytes = dense.serialize(true)
-
-// Deserialize from CRoaring-generated data
-let restored = match @roaring.RoaringBitmap::deserialize(bytes, true) {
-  Ok(bm) => bm
-  Err(e) => {
-    println("deserialize failed: \{e}")
-    panic()
-  }
+// The only exposed wire format is the interoperable portable format.
+let bytes = result.serialize()
+let restored = match @roaring.RoaringBitmap::deserialize(bytes) {
+  Ok(bitmap) => bitmap
+  Err(error) => panic("invalid bitmap: \{error}")
 }
 
-// Fast set operations
-let result = bitmap1.union(bitmap2).intersect(bitmap3)
-
-// Merge several bitmaps at once
-let merged = @roaring.RoaringBitmap::union_all([bitmap1, bitmap2, bitmap3])
-
-// Lazy iteration and rank/select
-let first_three = dense.iter().take(3).to_array()
-let how_many_le_500 = dense.rank(500U)
-let fifth_smallest = dense.select(4)
+let first_three = restored.iter().take(3).to_array()
+let count_at_or_below_500 = restored.rank(500U)
+let fifth = restored.select(4)
 ```
 
----
+Run the inverted-index example with `moon run examples/inverted_index`.
 
-## Differentiators vs. Existing Implementation
+## Implemented surface
 
-As of 2026-09-14, `kesmeey/RoaringBitmap` (last pushed 2025-06-25):
+- Array, Bitmap, and Run containers
+- standard set operations and multi-way union/intersection
+- half-open range construction, mutation, and containment
+- lazy `Iter[UInt]`, bitmap-level `rank` and `select`
+- Roaring portable serialization and strict deserialization
+- immutable compatibility helpers: `clear`, inclusive `range`, Jaccard similarity
+- statistics exposing container choices and encoded payload sizes
 
-| Feature | `kesmeey/RoaringBitmap` | This Project |
-|---------|------------------------|--------------|
-| ArrayContainer | ✅ | ✅ |
-| BitmapContainer | ✅ | ✅ |
-| RunContainer | ⚠️ Defined but never triggered (`optimize_container` has zero call sites) | ✅ Hooked into every mutation |
-| Portable serialization | ❌ No implementation | ✅ CRoaring-compatible |
-| Cross-language interop | ❌ | ✅ Tested with `roaring-wasm` |
-| Compression for consecutive data | ❌ Falls back to Bitmap (8KB) | ✅ Uses Run (< 100 bytes) |
-| Range operations (`add_range`, etc.) | ❌ | ✅ O(1) fast path for full-bucket ranges |
-| Lazy iteration / rank / select | ❌ | ✅ `iter()`, `rank()`, `select()` |
-| Test coverage | ⚠️ Basic | ✅ 120 cases + golden fixtures |
+## Verification evidence
 
----
+- Tests run on `wasm`, `wasm-gc`, and `js` in CI.
+- Official Java-generated files from `RoaringFormatSpec/testdata` are decoded,
+  checked for known values, and re-encoded byte-for-byte.
+- Six additional fixture shapes are generated by `roaring-wasm` v1.1.0, a
+  third-party CRoaring-based WASM package. CI verifies deterministic regeneration.
+- Malformed-format tests cover structural and semantic validation, including
+  every truncated prefix of representative serialized data.
+- Release-mode benchmark fixtures and a reproducible baseline are documented in
+  [`docs/benchmarks.md`](docs/benchmarks.md). They are not a competitor-speed claim.
 
-## Non-Goals (Out of Scope for This Hackathon)
-
-- **ps (Roaring64)** — this project focuses on 32-bit (`UInt32`) bitmaps only
-- **Thread-safe concurrent access** — MoonBit's concurrency story is still evolving; we provide immutable operations
-- **Fancy optimizations** (SIMD, AVX2 vectorization) — correctness and interop first, then optimize
-- **Frozen/mmap-able format** — portable format only; advanced formats are future work
-
----
-
-## Verification Strategy
-
-### How We Prove Correctness
-
-1. **Unit tests** — 120 test cases across container types, operations, and boundary/tie-break points
-2. **Bounds-checking property test** — every truncated prefix of a serialized bitmap must be rejected, proving no length check is missing in the parse path
-3. **Golden tests** — use `roaring-wasm` (official CRoaring WASM port) to generate reference data:
-   ```javascript
-   const bitmap = new RoaringBitmap32([1, 2, 3, 100, 65536]);
-   const bytes = bitmap.serialize(true); // portable format
-   // Feed `bytes` to MoonBit deserializer, verify exact match
-   ```
-4. **Compression ratio tests** — verify Run containers actually compress consecutive ranges
-
-### Test Data Sources
-
-- **Official spec**: https://github.com/RoaringBitmap/RoaringFormatSpec
-- **Reference impl**: CRoaring (C), roaring-rs (Rust), roaring-wasm (WASM)
-- **Already verified**: regenerating the fixtures from `roaring-wasm` v1.1.0 (`cd tools/crossref-fixtures && npm install && npm run generate`) reproduces the checked-in `golden_fixtures_test.mbt` byte-identically, across all six fixture shapes (empty, sparse array, dense bitmap, run, mixed three-bucket, six-bucket offset header)
-
----
-
-## Use Cases
-
-A complete runnable version of the inverted-index case below lives in
-`examples/inverted_index` — run it with `moon run examples/inverted_index`.
-
-### 1. Search Engine Inverted Index
-```moonbit
-// Document IDs matching "machine" AND "learning"
-let docs_machine = @roaring.RoaringBitmap::from_array([1U, 5U, 10U, 15U, 20U])
-let docs_learning = @roaring.RoaringBitmap::from_array([5U, 15U, 25U, 30U])
-let result = docs_machine.intersect(docs_learning) // [5, 15]
-
-// Merge postings lists for several terms at once
-let all_terms = @roaring.RoaringBitmap::union_all([docs_machine, docs_learning])
+```bash
+moon info
+moon fmt --check
+moon check -d
+moon test
+moon test --target wasm-gc
+moon test --target js
+moon bench --release --target wasm
 ```
 
-### 2. Time-Series Event Filtering
-```moonbit
-// Events in time range [1000, 5000) — the O(1) range fast path, not a loop
-let events = @roaring.RoaringBitmap::from_range(1000U, 5000U)
-// Internally uses RunContainer (< 100 bytes, not 8KB Bitmap)
-let serialized = events.serialize(true)
-// Send to Python analytics pipeline for further processing
-```
+## Comparison scope
 
-### 3. Cross-Language Data Exchange
-```moonbit
-// MoonBit service serializes user IDs
-let active_users = @roaring.RoaringBitmap::from_array([101U, 102U, 105U, 200U])
-let bytes = active_users.serialize(true)
+As reproduced on 2026-09-17 at competitor commit
+`f19c4977512aa120cd1add61e32f9dec36bd3102`:
 
-// Java/Go/Rust service deserializes the same data
-// (using their respective RoaringBitmap libraries)
-```
+| Area | `kesmeey/RoaringBitmap` | `moonbit-roaring` |
+| --- | --- | --- |
+| Basic 32-bit set operations | Yes | Yes |
+| Array/Bitmap/Run definitions | Yes | Yes |
+| Run selection on ordinary mutation paths | Optimizer has no call site at that commit | Integrated into mutations and set operations |
+| Roaring portable bytes | Not found at that commit | Tested with official testdata |
+| Range API | Inclusive filtering of existing values | Same compatibility API plus half-open construction/mutation |
+| Iteration | Callback traversal | Lazy `Iter[UInt]` |
+| Rank | Container-level helper | Bitmap-level `rank` and `select` |
+| Current toolchain | Pinned commit has old-generic-syntax parse errors on `moon 0.1.20260904` | Three-target CI |
 
----
+These are commit- and toolchain-specific observations, not a judgment about the
+other project's overall quality. Reproduction commands and source links are in
+the comparison document.
 
-## Development Roadmap
+## Scope and limitations
 
-| Date | Milestone | Status |
-|------|-----------|--------|
-| Sept 13 | Project setup, ecosystem gap analysis, API design | ✅ Done |
-| Sept 14-15 | Container types + auto-optimization hooks | ✅ Done |
-| Sept 16-17 | Set operations (union, intersect, difference, xor) | ✅ Done |
-| Sept 18 | Run-length heuristics + conversion logic | ✅ Done |
-| Sept 19-20 | Serialization format + cross-language diff tests | ✅ Done |
-| Sept 21-22 | Test suite (120 cases) + golden fixtures | ✅ Done |
-| — | Range ops, lazy iteration, rank/select, multi-way merge | ✅ Done |
-| Sept 23 | Example + documentation | ✅ Done |
-| Sept 24 | Final verification, publish to mooncakes.io | ⏳ Pending |
-
----
-
-## Contributing
-
-Contributions welcome after Sept 24! For now, this is a solo hackathon project.
-
----
+- 32-bit unsigned values only; no Roaring64.
+- Portable format only; no native/frozen/mmap formats.
+- Immutable operations; no thread-safe mutable bitmap API.
+- No SIMD-specific kernels and no claim of outperforming other implementations.
+- The native target is not currently part of the verified matrix.
 
 ## License
 
-Apache-2.0 — same as the official CRoaring implementation
+Apache-2.0.
 
----
-
-## References
-
-- [RoaringBitmap Official Site](https://roaringbitmap.org/)
-- [RoaringFormatSpec](https://github.com/RoaringBitmap/RoaringFormatSpec)
-- [CRoaring (reference impl)](https://github.com/RoaringBitmap/CRoaring)
-- [MoonBit Language](https://www.moonbitlang.com/)
-
----
-
-**This project is built for the 2026 September MoonBit Hackathon (New Ecosystem Projects track).**
+This project is being prepared for the September 2026 MoonBit Hackathon. The
+resubmission evidence is tracked in
+[`docs/competition/resubmission-strategy.zh-CN.md`](docs/competition/resubmission-strategy.zh-CN.md).

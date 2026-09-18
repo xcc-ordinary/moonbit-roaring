@@ -1,6 +1,6 @@
 # crossref-fixtures
 
-Generates golden serialization test data from `roaring-wasm` — the official
+Generates golden serialization test data from `roaring-wasm` — a third-party
 WebAssembly port of CRoaring, the C reference implementation of Roaring
 Bitmaps — and converts it into a MoonBit test file.
 

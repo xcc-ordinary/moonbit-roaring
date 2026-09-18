@@ -161,8 +161,8 @@ test "run flag bitset correctly marks a bit past the first byte" {
   assert_eq(stats.total_containers, 10)
   assert_eq(stats.array_containers, 9)
   assert_eq(stats.run_containers, 1)
-  let bytes = bm.serialize(true)
-  let restored = match RoaringBitmap::deserialize(bytes, true) {
+  let bytes = bm.serialize()
+  let restored = match RoaringBitmap::deserialize(bytes) {
     Ok(r) => r
     Err(_) => fail("expected successful deserialize")
   }

@@ -29,4 +29,4 @@ keywords = [
 
 preferred_target = "wasm"
 
-description = "Production-ready RoaringBitmap with true run-length optimization and CRoaring-compatible portable serialization format"
+description = "Interoperability-focused RoaringBitmap with automatic run compression and portable serialization"
