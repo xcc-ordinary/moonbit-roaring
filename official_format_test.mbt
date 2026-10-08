@@ -4,7 +4,7 @@
 
 ///|
 fn official_fixture_is_valid(data : Bytes) -> Bool {
-  match RoaringBitmap::deserialize(data) {
+  match @moonbit-roaring.RoaringBitmap::deserialize(data) {
     Err(_) => false
     Ok(bitmap) => {
       if bitmap.size() != 200100 {

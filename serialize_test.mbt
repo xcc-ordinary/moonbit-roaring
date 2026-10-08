@@ -2,9 +2,9 @@
 
 ///|
 test "round-trip empty bitmap" {
-  let bm = RoaringBitmap::new()
+  let bm = @moonbit-roaring.RoaringBitmap::new()
   let bytes = bm.serialize()
-  let restored = match RoaringBitmap::deserialize(bytes) {
+  let restored = match @moonbit-roaring.RoaringBitmap::deserialize(bytes) {
     Ok(r) => r
     Err(_) => fail("expected successful deserialize")
   }
@@ -13,9 +13,9 @@ test "round-trip empty bitmap" {
 
 ///|
 test "round-trip sparse array container" {
-  let bm = RoaringBitmap::from_array([1U, 100U, 1000U, 50000U])
+  let bm = @moonbit-roaring.RoaringBitmap::from_array([1U, 100U, 1000U, 50000U])
   let bytes = bm.serialize()
-  let restored = match RoaringBitmap::deserialize(bytes) {
+  let restored = match @moonbit-roaring.RoaringBitmap::deserialize(bytes) {
     Ok(r) => r
     Err(_) => fail("expected successful deserialize")
   }
@@ -28,11 +28,11 @@ test "round-trip dense bitmap container" {
   for i = 0; i < 16384; i = i + 2 {
     values.push(i.reinterpret_as_uint())
   }
-  let bm = RoaringBitmap::from_array(values)
+  let bm = @moonbit-roaring.RoaringBitmap::from_array(values)
   let stats = bm.get_stats()
   assert_eq(stats.bitmap_containers, 1)
   let bytes = bm.serialize()
-  let restored = match RoaringBitmap::deserialize(bytes) {
+  let restored = match @moonbit-roaring.RoaringBitmap::deserialize(bytes) {
     Ok(r) => r
     Err(_) => fail("expected successful deserialize")
   }
@@ -45,11 +45,11 @@ test "round-trip run container" {
   for i = 0; i < 10000; i = i + 1 {
     values.push(i.reinterpret_as_uint())
   }
-  let bm = RoaringBitmap::from_array(values)
+  let bm = @moonbit-roaring.RoaringBitmap::from_array(values)
   let stats = bm.get_stats()
   assert_eq(stats.run_containers, 1)
   let bytes = bm.serialize()
-  let restored = match RoaringBitmap::deserialize(bytes) {
+  let restored = match @moonbit-roaring.RoaringBitmap::deserialize(bytes) {
     Ok(r) => r
     Err(_) => fail("expected successful deserialize")
   }
@@ -70,14 +70,14 @@ test "round-trip mixed container types across many buckets" {
   for i = 0; i < 16384; i = i + 2 {
     values.push((131072 + i).reinterpret_as_uint())
   }
-  let bm = RoaringBitmap::from_array(values)
+  let bm = @moonbit-roaring.RoaringBitmap::from_array(values)
   let stats = bm.get_stats()
   assert_eq(stats.total_containers, 3)
   assert_eq(stats.array_containers, 1)
   assert_eq(stats.run_containers, 1)
   assert_eq(stats.bitmap_containers, 1)
   let bytes = bm.serialize()
-  let restored = match RoaringBitmap::deserialize(bytes) {
+  let restored = match @moonbit-roaring.RoaringBitmap::deserialize(bytes) {
     Ok(r) => r
     Err(_) => fail("expected successful deserialize")
   }
@@ -91,10 +91,10 @@ test "round-trip more than 4 containers triggers offset header" {
   for bucket = 0; bucket < 6; bucket = bucket + 1 {
     values.push((bucket * 100000 + 1).reinterpret_as_uint())
   }
-  let bm = RoaringBitmap::from_array(values)
+  let bm = @moonbit-roaring.RoaringBitmap::from_array(values)
   assert_eq(bm.get_stats().total_containers, 6)
   let bytes = bm.serialize()
-  let restored = match RoaringBitmap::deserialize(bytes) {
+  let restored = match @moonbit-roaring.RoaringBitmap::deserialize(bytes) {
     Ok(r) => r
     Err(_) => fail("expected successful deserialize")
   }
@@ -104,7 +104,7 @@ test "round-trip more than 4 containers triggers offset header" {
 ///|
 test "deserialize rejects empty input" {
   let empty_bytes = Bytes::new(0)
-  match RoaringBitmap::deserialize(empty_bytes) {
+  match @moonbit-roaring.RoaringBitmap::deserialize(empty_bytes) {
     Ok(_) => fail("expected an error for empty input")
     Err(_) => ()
   }
@@ -116,7 +116,7 @@ test "deserialize rejects invalid cookie" {
   buf.write_uint_le(999U)
   buf.write_uint_le(0U)
   let bad_bytes = buf.to_bytes()
-  match RoaringBitmap::deserialize(bad_bytes) {
+  match @moonbit-roaring.RoaringBitmap::deserialize(bad_bytes) {
     Ok(_) => fail("expected an error for invalid cookie")
     Err(_) => ()
   }
@@ -129,7 +129,7 @@ test "deserialize rejects a truncated container count header" {
   let buf = @buffer.Buffer::Buffer()
   buf.write_uint_le(12346U)
   buf.write_byte(b'\x00')
-  match RoaringBitmap::deserialize(buf.to_bytes()) {
+  match @moonbit-roaring.RoaringBitmap::deserialize(buf.to_bytes()) {
     Ok(_) => fail("expected an error for a truncated count header")
     Err(_) => ()
   }
@@ -137,7 +137,7 @@ test "deserialize rejects a truncated container count header" {
 
 ///|
 test "deserialize rejects run container data truncated at any offset" {
-  let bm = RoaringBitmap::from_range(0U, 100U)
+  let bm = @moonbit-roaring.RoaringBitmap::from_range(0U, 100U)
   assert_eq(bm.get_stats().run_containers, 1)
   let full = bm.serialize()
   // Chopping any number of trailing bytes must be caught rather than
@@ -147,7 +147,8 @@ test "deserialize rejects run container data truncated at any offset" {
     for i = 0; i < full.length() - cut; i = i + 1 {
       short.push(full[i])
     }
-    match RoaringBitmap::deserialize(Bytes::from_array(short)) {
+    match
+      @moonbit-roaring.RoaringBitmap::deserialize(Bytes::from_array(short)) {
       Ok(_) => fail("expected an error for run data truncated by \{cut}")
       Err(_) => ()
     }
@@ -160,7 +161,7 @@ test "deserialize rejects an out-of-range container count" {
   let buf = @buffer.Buffer::Buffer()
   buf.write_uint_le(12346U)
   buf.write_uint_le(70000U)
-  match RoaringBitmap::deserialize(buf.to_bytes()) {
+  match @moonbit-roaring.RoaringBitmap::deserialize(buf.to_bytes()) {
     Ok(_) => fail("expected an error for an out-of-range container count")
     Err(_) => ()
   }
@@ -173,7 +174,7 @@ test "deserialize rejects a run cookie with a missing flag bitset" {
   let buf = @buffer.Buffer::Buffer()
   let cookie : UInt = 12347U | (7U << 16)
   buf.write_uint_le(cookie)
-  match RoaringBitmap::deserialize(buf.to_bytes()) {
+  match @moonbit-roaring.RoaringBitmap::deserialize(buf.to_bytes()) {
     Ok(_) => fail("expected an error for a missing run-container bitset")
     Err(_) => ()
   }
@@ -186,8 +187,8 @@ test "every truncated prefix is rejected rather than read out of bounds" {
   // here means no length check is missing anywhere in the parse path;
   // a silent Ok would mean the parser read past the end of the buffer.
   let shapes = [
-    RoaringBitmap::from_array([1U, 100U, 1000U]),
-    RoaringBitmap::from_range(0U, 100U),
+    @moonbit-roaring.RoaringBitmap::from_array([1U, 100U, 1000U]),
+    @moonbit-roaring.RoaringBitmap::from_range(0U, 100U),
   ]
   for s in shapes {
     let full = s.serialize()
@@ -196,7 +197,8 @@ test "every truncated prefix is rejected rather than read out of bounds" {
       for i = 0; i < cut; i = i + 1 {
         short.push(full[i])
       }
-      match RoaringBitmap::deserialize(Bytes::from_array(short)) {
+      match
+        @moonbit-roaring.RoaringBitmap::deserialize(Bytes::from_array(short)) {
         Ok(_) => fail("prefix of length \{cut} should have been rejected")
         Err(_) => ()
       }
@@ -206,7 +208,7 @@ test "every truncated prefix is rejected rather than read out of bounds" {
 
 ///|
 test "RoaringError renders a readable message" {
-  match RoaringBitmap::deserialize(b"\x00\x00\x00\x00") {
+  match @moonbit-roaring.RoaringBitmap::deserialize(b"\x00\x00\x00\x00") {
     Ok(_) => fail("expected an error for an invalid cookie")
     Err(e) =>
       assert_eq(
@@ -218,7 +220,7 @@ test "RoaringError renders a readable message" {
 
 ///|
 test "deserialize rejects truncated container data" {
-  let bm = RoaringBitmap::from_array([1U, 2U, 3U])
+  let bm = @moonbit-roaring.RoaringBitmap::from_array([1U, 2U, 3U])
   let bytes = bm.serialize()
   // Chop off the last 3 bytes so container data underflows.
   let short = []
@@ -226,7 +228,7 @@ test "deserialize rejects truncated container data" {
     short.push(bytes[i])
   }
   let short_bytes = Bytes::from_array(short)
-  match RoaringBitmap::deserialize(short_bytes) {
+  match @moonbit-roaring.RoaringBitmap::deserialize(short_bytes) {
     Ok(_) => fail("expected an error for truncated input")
     Err(_) => ()
   }

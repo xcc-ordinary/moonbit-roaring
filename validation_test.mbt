@@ -2,7 +2,7 @@
 
 ///|
 fn expect_deserialize_error(data : Bytes) -> Unit {
-  match RoaringBitmap::deserialize(data) {
+  match @moonbit-roaring.RoaringBitmap::deserialize(data) {
     Ok(_) => abort("expected malformed portable bitmap to be rejected")
     Err(_) => ()
   }

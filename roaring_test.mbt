@@ -4,14 +4,14 @@
 
 ///|
 test "new bitmap is empty" {
-  let bm = RoaringBitmap::new()
+  let bm = @moonbit-roaring.RoaringBitmap::new()
   assert_true(bm.is_empty())
   assert_eq(bm.size(), 0)
 }
 
 ///|
 test "singleton contains exactly one value" {
-  let bm = RoaringBitmap::singleton(42U)
+  let bm = @moonbit-roaring.RoaringBitmap::singleton(42U)
   assert_true(bm.contains(42U))
   assert_false(bm.contains(43U))
   assert_eq(bm.size(), 1)
@@ -19,14 +19,14 @@ test "singleton contains exactly one value" {
 
 ///|
 test "add is idempotent" {
-  let bm = RoaringBitmap::new().add(5U).add(5U).add(5U)
+  let bm = @moonbit-roaring.RoaringBitmap::new().add(5U).add(5U).add(5U)
   assert_eq(bm.size(), 1)
   assert_true(bm.contains(5U))
 }
 
 ///|
 test "add multiple distinct values" {
-  let bm = RoaringBitmap::new().add(1U).add(2U).add(3U)
+  let bm = @moonbit-roaring.RoaringBitmap::new().add(1U).add(2U).add(3U)
   assert_eq(bm.size(), 3)
   assert_true(bm.contains(1U))
   assert_true(bm.contains(2U))
@@ -36,7 +36,7 @@ test "add multiple distinct values" {
 
 ///|
 test "remove existing value" {
-  let bm = RoaringBitmap::new().add(1U).add(2U).remove(1U)
+  let bm = @moonbit-roaring.RoaringBitmap::new().add(1U).add(2U).remove(1U)
   assert_eq(bm.size(), 1)
   assert_false(bm.contains(1U))
   assert_true(bm.contains(2U))
@@ -44,34 +44,34 @@ test "remove existing value" {
 
 ///|
 test "remove non-existing value is a no-op" {
-  let bm = RoaringBitmap::new().add(1U).remove(999U)
+  let bm = @moonbit-roaring.RoaringBitmap::new().add(1U).remove(999U)
   assert_eq(bm.size(), 1)
   assert_true(bm.contains(1U))
 }
 
 ///|
 test "remove last element empties bitmap" {
-  let bm = RoaringBitmap::new().add(7U).remove(7U)
+  let bm = @moonbit-roaring.RoaringBitmap::new().add(7U).remove(7U)
   assert_true(bm.is_empty())
   assert_false(bm.contains(7U))
 }
 
 ///|
 test "from_array deduplicates" {
-  let bm = RoaringBitmap::from_array([1U, 2U, 2U, 3U, 1U])
+  let bm = @moonbit-roaring.RoaringBitmap::from_array([1U, 2U, 2U, 3U, 1U])
   assert_eq(bm.size(), 3)
 }
 
 ///|
 test "min and max on empty bitmap" {
-  let bm = RoaringBitmap::new()
+  let bm = @moonbit-roaring.RoaringBitmap::new()
   assert_true(bm.min() is None)
   assert_true(bm.max() is None)
 }
 
 ///|
 test "min and max on populated bitmap" {
-  let bm = RoaringBitmap::from_array([50U, 10U, 30U])
+  let bm = @moonbit-roaring.RoaringBitmap::from_array([50U, 10U, 30U])
   assert_eq(bm.min(), Some(10U))
   assert_eq(bm.max(), Some(50U))
 }
@@ -81,7 +81,7 @@ test "min and max on populated bitmap" {
 ///|
 test "values across high-16-bit boundary are both stored" {
   // 65535 is the max low-16 value in bucket 0; 65536 is the min value in bucket 1.
-  let bm = RoaringBitmap::from_array([65535U, 65536U])
+  let bm = @moonbit-roaring.RoaringBitmap::from_array([65535U, 65536U])
   assert_eq(bm.size(), 2)
   assert_true(bm.contains(65535U))
   assert_true(bm.contains(65536U))
@@ -91,7 +91,7 @@ test "values across high-16-bit boundary are both stored" {
 ///|
 test "large value near UInt32 max round-trips" {
   let big : UInt = 4294967295U // 2^32 - 1
-  let bm = RoaringBitmap::singleton(big)
+  let bm = @moonbit-roaring.RoaringBitmap::singleton(big)
   assert_true(bm.contains(big))
   assert_eq(bm.to_array(), [big])
 }
@@ -100,7 +100,7 @@ test "large value near UInt32 max round-trips" {
 
 ///|
 test "to_array returns sorted values" {
-  let bm = RoaringBitmap::from_array([300U, 1U, 200U, 100U])
+  let bm = @moonbit-roaring.RoaringBitmap::from_array([300U, 1U, 200U, 100U])
   assert_eq(bm.to_array(), [1U, 100U, 200U, 300U])
 }
 
@@ -108,7 +108,7 @@ test "to_array returns sorted values" {
 
 ///|
 test "sparse values stay in an Array container" {
-  let bm = RoaringBitmap::from_array([1U, 1000U, 50000U])
+  let bm = @moonbit-roaring.RoaringBitmap::from_array([1U, 1000U, 50000U])
   let stats = bm.get_stats()
   assert_eq(stats.array_containers, 1)
   assert_eq(stats.run_containers, 0)
@@ -117,12 +117,12 @@ test "sparse values stay in an Array container" {
 
 ///|
 test "consecutive range converts to a Run container" {
-  let mut bm = RoaringBitmap::new()
+  let mut bm = @moonbit-roaring.RoaringBitmap::new()
   let values = []
   for i = 0; i < 10000; i = i + 1 {
     values.push(i.reinterpret_as_uint())
   }
-  bm = RoaringBitmap::from_array(values)
+  bm = @moonbit-roaring.RoaringBitmap::from_array(values)
   let stats = bm.get_stats()
   assert_eq(bm.size(), 10000)
   assert_eq(stats.run_containers, 1)
@@ -138,12 +138,12 @@ test "dense random-ish values convert to a Bitmap container" {
   // Even numbers from 0 to 16382 (8192 values): scattered (not consecutive,
   // so Run gives no benefit) and 8192 * 2 = 16384 bytes as an Array, which
   // is clearly worse than the fixed 8192-byte Bitmap encoding.
-  let mut bm = RoaringBitmap::new()
+  let mut bm = @moonbit-roaring.RoaringBitmap::new()
   let values = []
   for i = 0; i < 16384; i = i + 2 {
     values.push(i.reinterpret_as_uint())
   }
-  bm = RoaringBitmap::from_array(values)
+  bm = @moonbit-roaring.RoaringBitmap::from_array(values)
   let stats = bm.get_stats()
   assert_eq(bm.size(), 8192)
   assert_eq(stats.bitmap_containers, 1)
@@ -151,12 +151,12 @@ test "dense random-ish values convert to a Bitmap container" {
 
 ///|
 test "removing values from a run breaks it back into array when cheaper" {
-  let mut bm = RoaringBitmap::new()
+  let mut bm = @moonbit-roaring.RoaringBitmap::new()
   let values = []
   for i = 0; i < 20; i = i + 1 {
     values.push(i.reinterpret_as_uint())
   }
-  bm = RoaringBitmap::from_array(values)
+  bm = @moonbit-roaring.RoaringBitmap::from_array(values)
   // Remove every other element to destroy the consecutive run.
   for i = 1; i < 20; i = i + 2 {
     bm = bm.remove(i.reinterpret_as_uint())
@@ -172,56 +172,56 @@ test "removing values from a run breaks it back into array when cheaper" {
 
 ///|
 test "union combines two disjoint sets" {
-  let a = RoaringBitmap::from_array([1U, 2U, 3U])
-  let b = RoaringBitmap::from_array([4U, 5U])
+  let a = @moonbit-roaring.RoaringBitmap::from_array([1U, 2U, 3U])
+  let b = @moonbit-roaring.RoaringBitmap::from_array([4U, 5U])
   let result = a.union(b)
   assert_eq(result.to_array(), [1U, 2U, 3U, 4U, 5U])
 }
 
 ///|
 test "union deduplicates overlapping values" {
-  let a = RoaringBitmap::from_array([1U, 2U, 3U])
-  let b = RoaringBitmap::from_array([2U, 3U, 4U])
+  let a = @moonbit-roaring.RoaringBitmap::from_array([1U, 2U, 3U])
+  let b = @moonbit-roaring.RoaringBitmap::from_array([2U, 3U, 4U])
   let result = a.union(b)
   assert_eq(result.to_array(), [1U, 2U, 3U, 4U])
 }
 
 ///|
 test "intersect keeps only common values" {
-  let a = RoaringBitmap::from_array([1U, 2U, 3U, 4U])
-  let b = RoaringBitmap::from_array([2U, 4U, 6U])
+  let a = @moonbit-roaring.RoaringBitmap::from_array([1U, 2U, 3U, 4U])
+  let b = @moonbit-roaring.RoaringBitmap::from_array([2U, 4U, 6U])
   let result = a.intersect(b)
   assert_eq(result.to_array(), [2U, 4U])
 }
 
 ///|
 test "intersect with disjoint sets is empty" {
-  let a = RoaringBitmap::from_array([1U, 2U])
-  let b = RoaringBitmap::from_array([3U, 4U])
+  let a = @moonbit-roaring.RoaringBitmap::from_array([1U, 2U])
+  let b = @moonbit-roaring.RoaringBitmap::from_array([3U, 4U])
   let result = a.intersect(b)
   assert_true(result.is_empty())
 }
 
 ///|
 test "difference removes elements present in other" {
-  let a = RoaringBitmap::from_array([1U, 2U, 3U, 4U])
-  let b = RoaringBitmap::from_array([2U, 4U])
+  let a = @moonbit-roaring.RoaringBitmap::from_array([1U, 2U, 3U, 4U])
+  let b = @moonbit-roaring.RoaringBitmap::from_array([2U, 4U])
   let result = a.difference(b)
   assert_eq(result.to_array(), [1U, 3U])
 }
 
 ///|
 test "xor keeps values unique to each side" {
-  let a = RoaringBitmap::from_array([1U, 2U, 3U])
-  let b = RoaringBitmap::from_array([2U, 3U, 4U])
+  let a = @moonbit-roaring.RoaringBitmap::from_array([1U, 2U, 3U])
+  let b = @moonbit-roaring.RoaringBitmap::from_array([2U, 3U, 4U])
   let result = a.xor(b)
   assert_eq(result.to_array(), [1U, 4U])
 }
 
 ///|
 test "set operations across high-16-bit buckets" {
-  let a = RoaringBitmap::from_array([1U, 70000U])
-  let b = RoaringBitmap::from_array([70000U, 200000U])
+  let a = @moonbit-roaring.RoaringBitmap::from_array([1U, 70000U])
+  let b = @moonbit-roaring.RoaringBitmap::from_array([70000U, 200000U])
   assert_eq(a.union(b).to_array(), [1U, 70000U, 200000U])
   assert_eq(a.intersect(b).to_array(), [70000U])
   assert_eq(a.difference(b).to_array(), [1U])
@@ -229,8 +229,8 @@ test "set operations across high-16-bit buckets" {
 
 ///|
 test "union with empty bitmap is identity" {
-  let a = RoaringBitmap::from_array([1U, 2U, 3U])
-  let empty = RoaringBitmap::new()
+  let a = @moonbit-roaring.RoaringBitmap::from_array([1U, 2U, 3U])
+  let empty = @moonbit-roaring.RoaringBitmap::new()
   assert_eq(a.union(empty).to_array(), a.to_array())
 }
 
@@ -238,22 +238,22 @@ test "union with empty bitmap is identity" {
 
 ///|
 test "equals compares by content not structure" {
-  let a = RoaringBitmap::from_array([1U, 2U, 3U])
-  let b = RoaringBitmap::from_array([3U, 2U, 1U])
+  let a = @moonbit-roaring.RoaringBitmap::from_array([1U, 2U, 3U])
+  let b = @moonbit-roaring.RoaringBitmap::from_array([3U, 2U, 1U])
   assert_true(a.equals(b))
 }
 
 ///|
 test "equals detects differing content" {
-  let a = RoaringBitmap::from_array([1U, 2U, 3U])
-  let b = RoaringBitmap::from_array([1U, 2U, 4U])
+  let a = @moonbit-roaring.RoaringBitmap::from_array([1U, 2U, 3U])
+  let b = @moonbit-roaring.RoaringBitmap::from_array([1U, 2U, 4U])
   assert_false(a.equals(b))
 }
 
 ///|
 test "is_subset detects true subset" {
-  let a = RoaringBitmap::from_array([1U, 2U])
-  let b = RoaringBitmap::from_array([1U, 2U, 3U])
+  let a = @moonbit-roaring.RoaringBitmap::from_array([1U, 2U])
+  let b = @moonbit-roaring.RoaringBitmap::from_array([1U, 2U, 3U])
   assert_true(a.is_subset(b))
   assert_false(b.is_subset(a))
 }
@@ -267,8 +267,8 @@ test "is_subset detects true subset" {
 
 ///|
 test "set operations when other holds the earlier bucket" {
-  let a = RoaringBitmap::from_array([200000U])
-  let b = RoaringBitmap::from_array([1U])
+  let a = @moonbit-roaring.RoaringBitmap::from_array([200000U])
+  let b = @moonbit-roaring.RoaringBitmap::from_array([1U])
   assert_eq(a.union(b).to_array(), [1U, 200000U])
   assert_eq(a.xor(b).to_array(), [1U, 200000U])
   assert_eq(a.difference(b).to_array(), [200000U])
@@ -277,8 +277,8 @@ test "set operations when other holds the earlier bucket" {
 
 ///|
 test "set operations when other leads within a shared bucket" {
-  let a = RoaringBitmap::from_array([10U, 20U, 30U])
-  let b = RoaringBitmap::from_array([5U, 20U, 25U])
+  let a = @moonbit-roaring.RoaringBitmap::from_array([10U, 20U, 30U])
+  let b = @moonbit-roaring.RoaringBitmap::from_array([5U, 20U, 25U])
   assert_eq(a.intersect(b).to_array(), [20U])
   assert_eq(a.difference(b).to_array(), [10U, 30U])
   assert_eq(a.xor(b).to_array(), [5U, 10U, 25U, 30U])
@@ -286,8 +286,8 @@ test "set operations when other leads within a shared bucket" {
 
 ///|
 test "xor drains both tails when bucket counts differ" {
-  let a = RoaringBitmap::from_array([1U, 70000U, 140000U])
-  let b = RoaringBitmap::from_array([70000U])
+  let a = @moonbit-roaring.RoaringBitmap::from_array([1U, 70000U, 140000U])
+  let b = @moonbit-roaring.RoaringBitmap::from_array([70000U])
   assert_eq(a.xor(b).to_array(), [1U, 140000U])
   assert_eq(b.xor(a).to_array(), [1U, 140000U])
 }
@@ -296,7 +296,7 @@ test "xor drains both tails when bucket counts differ" {
 
 ///|
 test "min and max on a run container" {
-  let bm = RoaringBitmap::from_range(100U, 200U)
+  let bm = @moonbit-roaring.RoaringBitmap::from_range(100U, 200U)
   assert_eq(bm.get_stats().run_containers, 1)
   assert_eq(bm.min(), Some(100U))
   assert_eq(bm.max(), Some(199U))
@@ -308,7 +308,7 @@ test "min and max on a bitmap container" {
   for i = 0; i < 16384; i = i + 2 {
     values.push(i.reinterpret_as_uint())
   }
-  let bm = RoaringBitmap::from_array(values)
+  let bm = @moonbit-roaring.RoaringBitmap::from_array(values)
   assert_eq(bm.get_stats().bitmap_containers, 1)
   assert_eq(bm.min(), Some(0U))
   assert_eq(bm.max(), Some(16382U))
@@ -318,20 +318,24 @@ test "min and max on a bitmap container" {
 
 ///|
 test "add inserts a new bucket before an existing higher one" {
-  let bm = RoaringBitmap::singleton(200000U).add(5U)
+  let bm = @moonbit-roaring.RoaringBitmap::singleton(200000U).add(5U)
   assert_eq(bm.to_array(), [5U, 200000U])
   assert_eq(bm.get_stats().total_containers, 2)
 }
 
 ///|
 test "add_many merges into an already-existing bucket" {
-  let bm = RoaringBitmap::from_array([1U, 2U]).add_many([3U, 4U, 100U])
+  let bm = @moonbit-roaring.RoaringBitmap::from_array([1U, 2U]).add_many([
+    3U, 4U, 100U,
+  ])
   assert_eq(bm.to_array(), [1U, 2U, 3U, 4U, 100U])
 }
 
 ///|
 test "add_many creates a bucket ahead of existing higher buckets" {
-  let bm = RoaringBitmap::from_array([200000U]).add_many([5U, 6U])
+  let bm = @moonbit-roaring.RoaringBitmap::from_array([200000U]).add_many([
+    5U, 6U,
+  ])
   assert_eq(bm.to_array(), [5U, 6U, 200000U])
 }
 
@@ -339,23 +343,23 @@ test "add_many creates a bucket ahead of existing higher buckets" {
 
 ///|
 test "union_all of an empty array is an empty bitmap" {
-  let result = RoaringBitmap::union_all([])
+  let result = @moonbit-roaring.RoaringBitmap::union_all([])
   assert_true(result.is_empty())
 }
 
 ///|
 test "union_all of a single bitmap returns its contents" {
-  let a = RoaringBitmap::from_array([1U, 2U, 3U])
-  let result = RoaringBitmap::union_all([a])
+  let a = @moonbit-roaring.RoaringBitmap::from_array([1U, 2U, 3U])
+  let result = @moonbit-roaring.RoaringBitmap::union_all([a])
   assert_eq(result.to_array(), [1U, 2U, 3U])
 }
 
 ///|
 test "union_all merges several bitmaps across container types" {
-  let a = RoaringBitmap::from_array([1U, 2U])
-  let b = RoaringBitmap::from_range(100U, 200U)
-  let c = RoaringBitmap::from_array([2U, 300000U])
-  let result = RoaringBitmap::union_all([a, b, c])
+  let a = @moonbit-roaring.RoaringBitmap::from_array([1U, 2U])
+  let b = @moonbit-roaring.RoaringBitmap::from_range(100U, 200U)
+  let c = @moonbit-roaring.RoaringBitmap::from_array([2U, 300000U])
+  let result = @moonbit-roaring.RoaringBitmap::union_all([a, b, c])
   assert_eq(result.size(), 2 + 100 + 1)
   assert_true(result.contains(1U))
   assert_true(result.contains(150U))
@@ -364,31 +368,31 @@ test "union_all merges several bitmaps across container types" {
 
 ///|
 test "intersect_all of an empty array is an empty bitmap" {
-  let result = RoaringBitmap::intersect_all([])
+  let result = @moonbit-roaring.RoaringBitmap::intersect_all([])
   assert_true(result.is_empty())
 }
 
 ///|
 test "intersect_all of a single bitmap returns its contents" {
-  let a = RoaringBitmap::from_array([1U, 2U, 3U])
-  let result = RoaringBitmap::intersect_all([a])
+  let a = @moonbit-roaring.RoaringBitmap::from_array([1U, 2U, 3U])
+  let result = @moonbit-roaring.RoaringBitmap::intersect_all([a])
   assert_eq(result.to_array(), [1U, 2U, 3U])
 }
 
 ///|
 test "intersect_all keeps only values common to every bitmap" {
-  let a = RoaringBitmap::from_array([1U, 2U, 3U, 4U])
-  let b = RoaringBitmap::from_array([2U, 3U, 4U, 5U])
-  let c = RoaringBitmap::from_array([3U, 4U, 5U, 6U])
-  let result = RoaringBitmap::intersect_all([a, b, c])
+  let a = @moonbit-roaring.RoaringBitmap::from_array([1U, 2U, 3U, 4U])
+  let b = @moonbit-roaring.RoaringBitmap::from_array([2U, 3U, 4U, 5U])
+  let c = @moonbit-roaring.RoaringBitmap::from_array([3U, 4U, 5U, 6U])
+  let result = @moonbit-roaring.RoaringBitmap::intersect_all([a, b, c])
   assert_eq(result.to_array(), [3U, 4U])
 }
 
 ///|
 test "intersect_all is empty when any bitmap is disjoint from the rest" {
-  let a = RoaringBitmap::from_array([1U, 2U, 3U])
-  let b = RoaringBitmap::from_array([1U, 2U, 3U])
-  let c = RoaringBitmap::from_array([100U])
-  let result = RoaringBitmap::intersect_all([a, b, c])
+  let a = @moonbit-roaring.RoaringBitmap::from_array([1U, 2U, 3U])
+  let b = @moonbit-roaring.RoaringBitmap::from_array([1U, 2U, 3U])
+  let c = @moonbit-roaring.RoaringBitmap::from_array([100U])
+  let result = @moonbit-roaring.RoaringBitmap::intersect_all([a, b, c])
   assert_true(result.is_empty())
 }

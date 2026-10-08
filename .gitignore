@@ -9,3 +9,6 @@ target
 **/pkg.generated.mbti
 !/pkg.generated.mbti
 申报书.md
+
+# Local presentation scratch page; not part of the published package.
+project-dashboard.html

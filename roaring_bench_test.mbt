@@ -17,7 +17,7 @@ fn dense_fixture() -> Array[UInt] {
 }
 
 ///|
-fn mixed_fixture(offset : UInt) -> RoaringBitmap {
+fn mixed_fixture(offset : UInt) -> @moonbit-roaring.RoaringBitmap {
   let values : Array[UInt] = [offset + 1U, offset + 100U]
   for i = 0; i < 6000; i = i + 1 {
     values.push(offset + 65536U + i.reinterpret_as_uint())
@@ -25,14 +25,14 @@ fn mixed_fixture(offset : UInt) -> RoaringBitmap {
   for i = 0; i < 16384; i = i + 2 {
     values.push(offset + 131072U + i.reinterpret_as_uint())
   }
-  RoaringBitmap::from_array(values)
+  @moonbit-roaring.RoaringBitmap::from_array(values)
 }
 
 ///|
 test "bench construct sparse 4096 values" (it : @bench.T) {
   let values = sparse_fixture()
   it.bench(fn() {
-    let bitmap = RoaringBitmap::from_array(values)
+    let bitmap = @moonbit-roaring.RoaringBitmap::from_array(values)
     it.keep(bitmap)
   })
 }
@@ -41,7 +41,7 @@ test "bench construct sparse 4096 values" (it : @bench.T) {
 test "bench construct dense 16384 values" (it : @bench.T) {
   let values = dense_fixture()
   it.bench(fn() {
-    let bitmap = RoaringBitmap::from_array(values)
+    let bitmap = @moonbit-roaring.RoaringBitmap::from_array(values)
     it.keep(bitmap)
   })
 }
@@ -49,7 +49,7 @@ test "bench construct dense 16384 values" (it : @bench.T) {
 ///|
 test "bench construct consecutive range 60000 values" (it : @bench.T) {
   it.bench(fn() {
-    let bitmap = RoaringBitmap::from_range(0U, 60000U)
+    let bitmap = @moonbit-roaring.RoaringBitmap::from_range(0U, 60000U)
     it.keep(bitmap)
   })
 }
@@ -101,7 +101,7 @@ test "bench serialize mixed containers" (it : @bench.T) {
 test "bench deserialize mixed containers" (it : @bench.T) {
   let bytes = mixed_fixture(0U).serialize()
   it.bench(fn() {
-    let result = RoaringBitmap::deserialize(bytes)
+    let result = @moonbit-roaring.RoaringBitmap::deserialize(bytes)
     it.keep(result)
   })
 }

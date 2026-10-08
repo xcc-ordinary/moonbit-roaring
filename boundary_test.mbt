@@ -17,7 +17,7 @@ test "exactly 4096 scattered values ties Array vs Bitmap, Array wins" {
   for i = 0; i < 4096; i = i + 1 {
     values.push((i * 2).reinterpret_as_uint())
   }
-  let bm = RoaringBitmap::from_array(values)
+  let bm = @moonbit-roaring.RoaringBitmap::from_array(values)
   assert_eq(bm.size(), 4096)
   let stats = bm.get_stats()
   assert_eq(stats.array_containers, 1)
@@ -30,7 +30,7 @@ test "4097 scattered values breaks the tie toward Bitmap" {
   for i = 0; i < 4097; i = i + 1 {
     values.push((i * 2).reinterpret_as_uint())
   }
-  let bm = RoaringBitmap::from_array(values)
+  let bm = @moonbit-roaring.RoaringBitmap::from_array(values)
   assert_eq(bm.size(), 4097)
   let stats = bm.get_stats()
   assert_eq(stats.array_containers, 0)
@@ -43,7 +43,7 @@ test "4097 scattered values breaks the tie toward Bitmap" {
 test "two consecutive values tie Run vs Array, Run wins" {
   // One run [5,6]: run_cost = 1*4 = 4. As an array: 2*2 = 4. Tie resolves
   // to Run (run_cost <= array_cost is checked before array_cost <= bitmap_cost).
-  let bm = RoaringBitmap::from_array([5U, 6U])
+  let bm = @moonbit-roaring.RoaringBitmap::from_array([5U, 6U])
   let stats = bm.get_stats()
   assert_eq(stats.run_containers, 1)
   assert_eq(stats.array_containers, 0)
@@ -53,7 +53,7 @@ test "two consecutive values tie Run vs Array, Run wins" {
 test "a single isolated value never becomes a Run" {
   // One run of length 0 costs 4 bytes; as an array, 1 element costs 2
   // bytes. Array must win: a lone value should never pay the Run overhead.
-  let bm = RoaringBitmap::singleton(42U)
+  let bm = @moonbit-roaring.RoaringBitmap::singleton(42U)
   let stats = bm.get_stats()
   assert_eq(stats.array_containers, 1)
   assert_eq(stats.run_containers, 0)
@@ -62,7 +62,7 @@ test "a single isolated value never becomes a Run" {
 ///|
 test "three consecutive values prefer Run over Array" {
   // One run costs 4 bytes; as an array, 3 elements cost 6 bytes.
-  let bm = RoaringBitmap::from_array([10U, 11U, 12U])
+  let bm = @moonbit-roaring.RoaringBitmap::from_array([10U, 11U, 12U])
   let stats = bm.get_stats()
   assert_eq(stats.run_containers, 1)
 }
@@ -71,21 +71,21 @@ test "three consecutive values prefer Run over Array" {
 
 ///|
 test "value 0 is stored and retrieved correctly" {
-  let bm = RoaringBitmap::singleton(0U)
+  let bm = @moonbit-roaring.RoaringBitmap::singleton(0U)
   assert_true(bm.contains(0U))
   assert_eq(bm.to_array(), [0U])
 }
 
 ///|
 test "max low-16 value 65535 stays in bucket 0" {
-  let bm = RoaringBitmap::singleton(65535U)
+  let bm = @moonbit-roaring.RoaringBitmap::singleton(65535U)
   assert_true(bm.contains(65535U))
   assert_eq(bm.get_stats().total_containers, 1)
 }
 
 ///|
 test "min high-16 value 65536 starts bucket 1" {
-  let bm = RoaringBitmap::singleton(65536U)
+  let bm = @moonbit-roaring.RoaringBitmap::singleton(65536U)
   assert_true(bm.contains(65536U))
   assert_false(bm.contains(65535U))
 }
@@ -94,7 +94,7 @@ test "min high-16 value 65536 starts bucket 1" {
 test "0 and UInt32 max coexist without collision" {
   let min_val = 0U
   let max_val = 4294967295U // 2^32 - 1
-  let bm = RoaringBitmap::from_array([min_val, max_val])
+  let bm = @moonbit-roaring.RoaringBitmap::from_array([min_val, max_val])
   assert_eq(bm.size(), 2)
   assert_true(bm.contains(min_val))
   assert_true(bm.contains(max_val))
@@ -106,7 +106,7 @@ test "0 and UInt32 max coexist without collision" {
 test "values straddling a mid-range bucket boundary" {
   // 2^31 sits exactly on a high-16 boundary (bucket 32768).
   let boundary : UInt = 2147483648U // 2^31
-  let bm = RoaringBitmap::from_array([boundary - 1, boundary])
+  let bm = @moonbit-roaring.RoaringBitmap::from_array([boundary - 1, boundary])
   assert_eq(bm.size(), 2)
   assert_true(bm.contains(boundary - 1))
   assert_true(bm.contains(boundary))
@@ -121,7 +121,7 @@ test "removing elements downgrades Bitmap back to Array" {
   for i = 0; i < 4097; i = i + 1 {
     values.push((i * 2).reinterpret_as_uint())
   }
-  let mut bm = RoaringBitmap::from_array(values)
+  let mut bm = @moonbit-roaring.RoaringBitmap::from_array(values)
   assert_eq(bm.get_stats().bitmap_containers, 1)
   // Remove enough scattered values to make Array cheaper again.
   for i = 0; i < 4090; i = i + 1 {
@@ -135,7 +135,9 @@ test "removing elements downgrades Bitmap back to Array" {
 
 ///|
 test "removing the only element of a container drops the container entirely" {
-  let bm = RoaringBitmap::from_array([1U, 70000U]).remove(70000U)
+  let bm = @moonbit-roaring.RoaringBitmap::from_array([1U, 70000U]).remove(
+    70000U,
+  )
   assert_eq(bm.size(), 1)
   assert_eq(bm.get_stats().total_containers, 1)
   assert_false(bm.contains(70000U))
@@ -156,13 +158,13 @@ test "run flag bitset correctly marks a bit past the first byte" {
   for i = 0; i < 20; i = i + 1 {
     values.push((9 * 100000 + i).reinterpret_as_uint())
   }
-  let bm = RoaringBitmap::from_array(values)
+  let bm = @moonbit-roaring.RoaringBitmap::from_array(values)
   let stats = bm.get_stats()
   assert_eq(stats.total_containers, 10)
   assert_eq(stats.array_containers, 9)
   assert_eq(stats.run_containers, 1)
   let bytes = bm.serialize()
-  let restored = match RoaringBitmap::deserialize(bytes) {
+  let restored = match @moonbit-roaring.RoaringBitmap::deserialize(bytes) {
     Ok(r) => r
     Err(_) => fail("expected successful deserialize")
   }
@@ -175,7 +177,7 @@ test "run flag bitset correctly marks a bit past the first byte" {
 ///|
 test "add_many with duplicates spanning multiple buckets deduplicates correctly" {
   let values = [1U, 1U, 70000U, 70000U, 1U, 140000U]
-  let bm = RoaringBitmap::from_array(values)
+  let bm = @moonbit-roaring.RoaringBitmap::from_array(values)
   assert_eq(bm.size(), 3)
   assert_eq(bm.to_array(), [1U, 70000U, 140000U])
 }
@@ -186,7 +188,7 @@ test "add_many then scattered remove leaves correct residual set" {
   for i = 0; i < 100; i = i + 1 {
     values.push(i.reinterpret_as_uint())
   }
-  let mut bm = RoaringBitmap::from_array(values)
+  let mut bm = @moonbit-roaring.RoaringBitmap::from_array(values)
   for i = 0; i < 100; i = i + 2 {
     bm = bm.remove(i.reinterpret_as_uint())
   }
