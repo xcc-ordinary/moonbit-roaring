@@ -26,8 +26,8 @@ pub struct RoaringBitmap {
 pub fn RoaringBitmap::add(Self, UInt) -> Self
 pub fn RoaringBitmap::add_many(Self, Array[UInt]) -> Self
 pub fn RoaringBitmap::add_range(Self, UInt, UInt) -> Self
-pub fn RoaringBitmap::and_cardinality(Self, Self) -> Int
-pub fn RoaringBitmap::andnot_cardinality(Self, Self) -> Int
+pub fn RoaringBitmap::and_cardinality(Self, Self) -> Int64
+pub fn RoaringBitmap::andnot_cardinality(Self, Self) -> Int64
 pub fn RoaringBitmap::clear(Self) -> Self
 pub fn RoaringBitmap::contains(Self, UInt) -> Bool
 pub fn RoaringBitmap::contains_range(Self, UInt, UInt) -> Bool
@@ -49,7 +49,7 @@ pub fn RoaringBitmap::max(Self) -> UInt?
 pub fn RoaringBitmap::min(Self) -> UInt?
 pub fn RoaringBitmap::new() -> Self
 pub fn RoaringBitmap::not_equal(Self, Self) -> Bool
-pub fn RoaringBitmap::or_cardinality(Self, Self) -> Int
+pub fn RoaringBitmap::or_cardinality(Self, Self) -> Int64
 pub fn RoaringBitmap::range(Self, UInt, UInt) -> Self
 pub fn RoaringBitmap::rank(Self, UInt) -> Int
 pub fn RoaringBitmap::remove(Self, UInt) -> Self
@@ -62,7 +62,7 @@ pub fn RoaringBitmap::to_array(Self) -> Array[UInt]
 pub fn RoaringBitmap::union(Self, Self) -> Self
 pub fn RoaringBitmap::union_all(Array[Self]) -> Self
 pub fn RoaringBitmap::xor(Self, Self) -> Self
-pub fn RoaringBitmap::xor_cardinality(Self, Self) -> Int
+pub fn RoaringBitmap::xor_cardinality(Self, Self) -> Int64
 
 pub enum RoaringError {
   DeserializationError(String)

@@ -333,6 +333,19 @@ fn container_contains(c : Container, value : UInt16) -> Bool {
 }
 
 ///|
+/// Whether every value of `a` is also present in `b`. Deliberately a
+/// membership walk rather than a cardinality comparison: a count-based test
+/// would need `|A \ B| == 0`, and that total can overflow an `Int`.
+fn container_is_subset(a : Container, b : Container) -> Bool {
+  for v in container_to_sorted_array(a) {
+    if !container_contains(b, v) {
+      return false
+    }
+  }
+  true
+}
+
+///|
 fn container_min(c : Container) -> UInt16? {
   match c {
     Array(arr) => if arr.length() == 0 { None } else { Some(arr[0]) }
