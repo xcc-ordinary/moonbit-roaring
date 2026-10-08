@@ -351,9 +351,15 @@ test "flip spanning many buckets complements each bucket locally" {
 }
 
 ///|
-test "flip with an inverted interval is empty" {
+test "flip with an inverted interval leaves the bitmap alone" {
+  // Swapped bounds are a no-op, not an empty result: returning an empty
+  // bitmap would silently discard every value. This matches CRoaring and
+  // this package's own add_range/remove_range.
   let bm = @moonbit-roaring.RoaringBitmap::from_array([1U, 2U, 3U])
-  assert_true(bm.flip(10U, 5U).is_empty())
+  assert_eq(bm.flip(10U, 5U).to_array(), bm.to_array())
+  assert_eq(bm.flip(3U, 1U).to_array(), bm.to_array())
+  // A closed interval of one value is not inverted: it toggles that value.
+  assert_eq(bm.flip(1U, 1U).to_array(), [2U, 3U])
 }
 
 ///|

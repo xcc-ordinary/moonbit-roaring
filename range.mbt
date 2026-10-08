@@ -304,8 +304,12 @@ fn bucket_local_closed_range(
 /// Values in the local inclusive range `[lo, hi]` that are absent from the
 /// sorted array `existing`, produced by walking the gaps between `existing`'s
 /// values rather than by materializing the whole interval and differencing
-/// it. A full bucket therefore costs O(65536 - cardinality) instead of
-/// O(65536) plus a second pass.
+/// it — so a full bucket costs O(65536 - cardinality) in output size instead
+/// of O(65536) plus a second pass.
+///
+/// Note the operand still has to be decoded first: `container_to_sorted_array`
+/// is itself O(65536) for Run and Bitmap containers, so the saving is on the
+/// produced side, not the read side.
 fn range_minus_sorted(
   lo : Int,
   hi : Int,
@@ -425,6 +429,12 @@ fn flip_range_in_bucket(
 /// other words the result is `[start, end] \ self`, restricted to `[start,
 /// end]`.
 ///
+/// An inverted interval (`start > end`) is a no-op and returns the receiver
+/// unchanged, matching CRoaring and this package's own `add_range` /
+/// `remove_range`. Returning an empty bitmap instead would silently discard
+/// every value, which is a harsh outcome for what is usually a swapped pair
+/// of bounds.
+///
 /// Note the contrast with `add_range`/`remove_range`, which take half-open
 /// intervals: `flip` is closed because that is what the reference
 /// implementations expose, and because a closed interval is the only way to
@@ -441,7 +451,7 @@ pub fn RoaringBitmap::flip(
   end : UInt,
 ) -> RoaringBitmap {
   if start > end {
-    return RoaringBitmap::new()
+    return self
   }
   let high_start = extract_high(start).to_int()
   let high_end = extract_high(end).to_int()

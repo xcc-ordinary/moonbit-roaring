@@ -499,14 +499,25 @@ pub fn RoaringBitmap::equals(
 ///|
 /// Check if self is a subset of other.
 ///
-/// Uses `andnot_cardinality` rather than materializing the intersection:
-/// `self ⊆ other` holds exactly when nothing in `self` is missing from
-/// `other`, so the answer needs a count, not a bitmap.
+/// Implemented as a direct containment walk rather than through
+/// `andnot_cardinality`: counting is fine until the total passes 2^31, where
+/// an `Int` would wrap and turn "not a subset" into a false positive. Walking
+/// the containers and checking membership also short-circuits on the first
+/// missing value instead of scanning both bitmaps to the end.
 pub fn RoaringBitmap::is_subset(
   self : RoaringBitmap,
   other : RoaringBitmap,
 ) -> Bool {
-  self.andnot_cardinality(other) == 0
+  for hc in self.containers {
+    match find_bucket(other.containers, hc.key) {
+      NotFound(_) => return false
+      Found(idx) =>
+        if !container_is_subset(hc.container, other.containers[idx].container) {
+          return false
+        }
+    }
+  }
+  true
 }
 
 ///|
@@ -517,7 +528,7 @@ pub fn RoaringBitmap::jaccard_similarity(
   other : RoaringBitmap,
 ) -> Double {
   let union_size = self.or_cardinality(other)
-  if union_size == 0 {
+  if union_size == 0L {
     1.0
   } else {
     self.and_cardinality(other).to_double() / union_size.to_double()
@@ -573,6 +584,11 @@ pub fn RoaringBitmap::to_array(self : RoaringBitmap) -> Array[UInt] {
 ///|
 /// Get detailed statistics about internal structure
 /// Useful for verifying container optimization
+///
+/// `total_bytes_used` sums `container_byte_size`, the same accounting
+/// `serialize` uses, so it agrees with the serialized payload rather than
+/// under-counting Run containers by their two-byte run-count header. It still
+/// excludes the cookie, descriptive and offset headers.
 pub fn RoaringBitmap::get_stats(self : RoaringBitmap) -> RoaringStats {
   let mut array_count = 0
   let mut bitmap_count = 0
@@ -580,19 +596,11 @@ pub fn RoaringBitmap::get_stats(self : RoaringBitmap) -> RoaringStats {
   let mut total_bytes = 0
   for hc in self.containers {
     match hc.container {
-      Array(arr) => {
-        array_count = array_count + 1
-        total_bytes = total_bytes + arr.length() * 2
-      }
-      Bitmap(_) => {
-        bitmap_count = bitmap_count + 1
-        total_bytes = total_bytes + bitmap_container_size_bytes
-      }
-      Run(runs) => {
-        run_count = run_count + 1
-        total_bytes = total_bytes + runs.length() * 4
-      }
+      Array(_) => array_count = array_count + 1
+      Bitmap(_) => bitmap_count = bitmap_count + 1
+      Run(_) => run_count = run_count + 1
     }
+    total_bytes = total_bytes + container_byte_size(hc.container)
   }
   let naive_bytes = if self.size == 0 { 1 } else { (self.size + 7) / 8 }
   {
