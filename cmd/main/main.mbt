@@ -77,12 +77,19 @@ fn parse_uint(text : String) -> Result[UInt, String] {
   if chars.length() == 0 {
     return Err("empty number")
   }
+  let max_value : UInt = 4294967295U
   let mut value : UInt = 0U
   for c in chars {
     if c < '0' || c > '9' {
       return Err("not a decimal number: \{text}")
     }
-    value = value * 10U + (c.to_int() - '0'.to_int()).reinterpret_as_uint()
+    let digit = (c.to_int() - '0'.to_int()).reinterpret_as_uint()
+    // `UInt` is 32-bit and wraps silently, so a value past 4294967295 would
+    // be quietly truncated into a different bitmap rather than rejected.
+    if value > (max_value - digit) / 10U {
+      return Err("number out of range (max 4294967295): \{text}")
+    }
+    value = value * 10U + digit
   }
   Ok(value)
 }

@@ -37,6 +37,16 @@ test "parse_uint accepts decimal and rejects the rest" {
 }
 
 ///|
+test "parse_uint rejects values that would wrap" {
+  // `UInt` is 32-bit; without an explicit bound, 4294967296 would decode as 0
+  // and silently produce the wrong bitmap.
+  assert_true(parse_uint("4294967296") is Err(_))
+  assert_true(parse_uint("99999999999") is Err(_))
+  assert_true(parse_uint("18446744073709551616") is Err(_))
+  assert_eq(parse_uint("4294967295"), Ok(4294967295U))
+}
+
+///|
 test "encode then check agrees on a portable round trip" {
   // The two subcommands share the hex codec, so a bitmap built by `encode`
   // must be accepted by `check` as byte-for-byte identical.
