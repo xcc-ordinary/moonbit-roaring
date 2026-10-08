@@ -36,18 +36,18 @@ the whole bitmap. `to_array()` decodes everything.
 
 ## Counting without materializing
 
-The four cardinality methods answer size questions while producing only an
-`Int`. Their names follow CRoaring so the API reads the same across
+The four cardinality methods answer size questions while producing only a
+count. Their names follow CRoaring so the API reads the same across
 languages.
 
 ```moonbit
 let term_a = @roaring.RoaringBitmap::from_array([1U, 2U, 3U, 4U])
 let term_b = @roaring.RoaringBitmap::from_array([3U, 4U, 5U, 6U])
 
-assert_eq(term_a.and_cardinality(term_b), 2)    // |A ∩ B|
-assert_eq(term_a.or_cardinality(term_b), 6)     // |A ∪ B|
-assert_eq(term_a.andnot_cardinality(term_b), 2) // |A \ B|
-assert_eq(term_a.xor_cardinality(term_b), 4)    // |A ⊕ B|
+assert_eq(term_a.and_cardinality(term_b), 2L)    // |A ∩ B|
+assert_eq(term_a.or_cardinality(term_b), 6L)     // |A ∪ B|
+assert_eq(term_a.andnot_cardinality(term_b), 2L) // |A \ B|
+assert_eq(term_a.xor_cardinality(term_b), 4L)    // |A ⊕ B|
 ```
 
 Disjoint bitmaps are answered from the cached per-container cardinalities
@@ -57,6 +57,30 @@ two 65536-element array decodes.
 
 Note that `and_cardinality`, `or_cardinality` and `xor_cardinality` are
 symmetric; `andnot_cardinality` is the one directional operation.
+
+### Why the return type is `Int64`
+
+A `RoaringBitmap` can hold up to 2^32 values, which does not fit in MoonBit's
+32-bit signed `Int`. CRoaring's counterparts return `uint64_t` for the same
+reason, so these four methods return `Int64` and stay exact across the whole
+representable range:
+
+```moonbit
+let low = @roaring.RoaringBitmap::new().add_range(0U, 2147483648U)
+let high = @roaring.RoaringBitmap::new()
+  .add_range(2147483648U, 4294967295U)
+  .add(4294967295U)
+assert_eq(low.or_cardinality(high), 4294967296L)
+assert_eq(low.jaccard_similarity(high), 0.0)   // disjoint, not "both empty"
+```
+
+`is_subset` is implemented as a direct containment walk rather than through
+`andnot_cardinality`, so it cannot be fooled by a wrapped count into
+reporting a non-subset as a subset.
+
+Be aware that `size()` still returns a 32-bit `Int`, so a bitmap holding more
+than 2147483647 elements cannot report its own cardinality through it. The
+cardinality methods above are the ones that stay exact.
 
 ## Ranges: half-open versus closed
 
@@ -88,6 +112,11 @@ assert_eq(bm.flip(10U, 19U).to_array(), [13U, 14U, 15U, 16U, 17U, 18U, 19U, 20U]
 ```
 
 `flip` is an involution, so `bm.flip(a, b).flip(a, b) == bm`.
+
+An inverted interval (`start > end`) is a no-op: the receiver comes back
+unchanged. That matches CRoaring and this package's own `add_range` /
+`remove_range`, and it avoids the far worse outcome of silently returning an
+empty bitmap when a pair of bounds gets swapped.
 
 One subtlety worth knowing: complementing a bucket over its *full* range
 yields "everything the bucket did not already hold", which is empty only when
@@ -139,12 +168,14 @@ $ moon run cmd/main -- info 3b3003000f0000ffff0100ffff0200ffff03003f0d250000002b
 values          200000
 min / max       0 / 199999
 containers      4 (array 0, bitmap 0, run 4)
-container bytes 16
+container bytes 24
 serialized      61
 ```
 
 That is a 200,000-value consecutive range in 61 bytes, stored as four `Run`
-containers.
+containers. `container bytes` is the payload alone; the remaining 37 bytes
+are the cookie, the descriptive header, the run-flag bitset and the offset
+header.
 
 ### `encode [values...] [--start N --end N]`
 

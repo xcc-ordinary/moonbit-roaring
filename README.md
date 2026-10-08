@@ -62,7 +62,8 @@ let fifth = restored.select(4)
 ```
 
 Counting questions do not need the result bitmap, so they have their own
-methods — `and_cardinality` and friends report a size without building one:
+methods — `and_cardinality` and friends report a size without building one.
+They return `Int64`, because a bitmap can hold up to 2^32 values:
 
 ```moonbit
 let matched_both = term_a.and_cardinality(term_b)
@@ -174,9 +175,9 @@ the comparison document.
 - Portable format only; no native/frozen/mmap formats.
 - Immutable operations; no thread-safe mutable bitmap API.
 - `size()` returns a 32-bit signed `Int`, so a bitmap holding more than
-  2147483647 elements cannot report its own cardinality. Complementing the
-  whole 32-bit universe with `flip(0U, 4294967295U)` is expressible but not
-  countable; prefer the narrowest interval that answers the question.
+  2147483647 elements cannot report its own cardinality through it. The four
+  `*_cardinality` methods return `Int64` instead and stay exact across the
+  whole 2^32 range.
 - No SIMD-specific kernels and no claim of outperforming other implementations.
 - The native target is not currently part of the verified matrix.
 

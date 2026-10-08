@@ -58,7 +58,7 @@ let fifth = restored.select(4)
 ```
 
 计数类问题不需要结果位图本身，因此有单独的方法——`and_cardinality` 等只返回基数，
-不构造任何中间位图：
+不构造任何中间位图。它们返回 `Int64`，因为位图最多可容纳 2^32 个值：
 
 ```moonbit
 let matched_both = term_a.and_cardinality(term_b)
@@ -164,9 +164,8 @@ moon bench --release --target wasm
 - 只支持 32 位无符号整数，不支持 Roaring64。
 - 只支持 portable 格式，不提供 native/frozen/mmap 格式。
 - 提供不可变操作，不提供线程安全的可变位图 API。
-- `size()` 返回 32 位有符号 `Int`，因此元素数超过 2147483647 的位图无法报告自身基数。
-  用 `flip(0U, 4294967295U)` 求整个 32 位全域的补集是可以表达的，但结果无法计数；
-  请尽量使用能回答问题的最窄区间。
+- `size()` 返回 32 位有符号 `Int`，因此元素数超过 2147483647 的位图无法通过它报告自身基数。
+  四个 `*_cardinality` 方法返回 `Int64`，在整个 2^32 范围内保持精确。
 - 尚无 SIMD 专用内核，也不宣称性能优于其他实现。
 - 当前验证矩阵不包含 native 目标。
 
