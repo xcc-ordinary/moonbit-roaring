@@ -1,0 +1,164 @@
+// Tests for the cardinality-only set operations.
+//
+// The invariant under test is that each `*_cardinality` method agrees with
+// its materializing counterpart, so the tests deliberately pair them rather
+// than hard-coding expected counts: a disagreement means the counting merge
+// diverged from the real one, whichever direction the bug runs.
+
+///|
+/// `count` values starting at `offset`, stepping by two. Striding by two is
+/// what defeats run-length encoding, which is how a test forces the Bitmap
+/// container representation instead of getting a Run for free.
+fn strided_values(count : Int, offset : Int) -> Array[UInt] {
+  Array::makei(count, i => (offset + i * 2).reinterpret_as_uint())
+}
+
+///|
+/// Every cardinality method must report the size of the bitmap the
+/// corresponding materializing operation would have built.
+fn assert_cardinality_agrees(
+  a : @moonbit-roaring.RoaringBitmap,
+  b : @moonbit-roaring.RoaringBitmap,
+) -> Unit raise {
+  assert_eq(a.and_cardinality(b), a.intersect(b).size())
+  assert_eq(a.or_cardinality(b), a.union(b).size())
+  assert_eq(a.andnot_cardinality(b), a.difference(b).size())
+  assert_eq(a.xor_cardinality(b), a.xor(b).size())
+}
+
+///|
+test "cardinality agrees with materializing operations on sparse data" {
+  let a = @moonbit-roaring.RoaringBitmap::from_array([1U, 2U, 3U, 1000U])
+  let b = @moonbit-roaring.RoaringBitmap::from_array([2U, 3U, 4U, 1001U])
+  assert_cardinality_agrees(a, b)
+  assert_eq(a.and_cardinality(b), 2)
+  assert_eq(a.or_cardinality(b), 6)
+  assert_eq(a.andnot_cardinality(b), 2)
+  assert_eq(a.xor_cardinality(b), 4)
+}
+
+///|
+test "cardinality agrees across bucket boundaries" {
+  // Keys 0, 1 and 3 on the left; 1, 2 and 3 on the right, so every branch of
+  // the container-key merge walk is taken at least once.
+  let a = @moonbit-roaring.RoaringBitmap::from_array([
+    1U, 65537U, 200000U, 200001U,
+  ])
+  let b = @moonbit-roaring.RoaringBitmap::from_array([65537U, 131073U, 200000U])
+  assert_cardinality_agrees(a, b)
+}
+
+///|
+test "cardinality agrees on disjoint bitmaps" {
+  let a = @moonbit-roaring.RoaringBitmap::from_range(0U, 100U)
+  let b = @moonbit-roaring.RoaringBitmap::from_range(1000U, 1100U)
+  assert_cardinality_agrees(a, b)
+  assert_eq(a.and_cardinality(b), 0)
+  assert_eq(a.or_cardinality(b), 200)
+  assert_eq(a.andnot_cardinality(b), 100)
+  assert_eq(a.xor_cardinality(b), 200)
+}
+
+///|
+test "cardinality handles empty operands" {
+  let empty = @moonbit-roaring.RoaringBitmap::new()
+  let a = @moonbit-roaring.RoaringBitmap::from_array([1U, 2U, 65536U])
+  assert_cardinality_agrees(empty, a)
+  assert_cardinality_agrees(a, empty)
+  assert_cardinality_agrees(empty, empty)
+  assert_eq(empty.or_cardinality(a), 3)
+  assert_eq(a.andnot_cardinality(empty), 3)
+  assert_eq(a.and_cardinality(empty), 0)
+}
+
+///|
+test "cardinality agrees on dense bitmap containers" {
+  // A consecutive range always collapses to a single cheap Run, so dense
+  // Bitmap containers need strided data instead: every other value is far
+  // too fragmented to run-length encode, and past 4096 values the array
+  // encoding costs more than the 8KB bitmap.
+  let a = @moonbit-roaring.RoaringBitmap::from_array(strided_values(20000, 0))
+  let b = @moonbit-roaring.RoaringBitmap::from_array(
+    strided_values(20000, 10000),
+  )
+  let stats_a = a.get_stats()
+  assert_eq(stats_a.bitmap_containers, 1)
+  assert_eq(a.get_stats().array_containers, 0)
+  assert_eq(b.get_stats().bitmap_containers, 1)
+  assert_cardinality_agrees(a, b)
+  // a = even values in [0, 40000), b = even values in [10000, 50000).
+  assert_eq(a.and_cardinality(b), 15000)
+  assert_eq(a.or_cardinality(b), 25000)
+  assert_eq(a.andnot_cardinality(b), 5000)
+  assert_eq(a.xor_cardinality(b), 10000)
+}
+
+///|
+test "cardinality agrees on run containers" {
+  // Consecutive ranges collapse to Run containers; counting must still match.
+  // Both ranges are kept inside bucket 0 so each bitmap is exactly one Run.
+  let a = @moonbit-roaring.RoaringBitmap::from_range(0U, 50000U)
+  let b = @moonbit-roaring.RoaringBitmap::from_range(25000U, 60000U)
+  assert_eq(a.get_stats().run_containers, 1)
+  assert_eq(b.get_stats().run_containers, 1)
+  assert_cardinality_agrees(a, b)
+  assert_eq(a.and_cardinality(b), 25000)
+  assert_eq(a.or_cardinality(b), 60000)
+  assert_eq(a.andnot_cardinality(b), 25000)
+  assert_eq(a.xor_cardinality(b), 35000)
+}
+
+///|
+test "cardinality agrees on mixed container types" {
+  // Array on one side, Bitmap on the other, Run on a third: the generic
+  // array-decode path handles every combination.
+  let sparse = @moonbit-roaring.RoaringBitmap::from_array([1U, 2U, 3U, 15000U])
+  let dense = @moonbit-roaring.RoaringBitmap::from_range(0U, 20000U)
+  let runs = @moonbit-roaring.RoaringBitmap::from_range(10000U, 60000U)
+  assert_cardinality_agrees(sparse, dense)
+  assert_cardinality_agrees(sparse, runs)
+  assert_cardinality_agrees(dense, runs)
+  assert_cardinality_agrees(dense, dense)
+}
+
+///|
+test "cardinality is symmetric for and, or and xor" {
+  let a = @moonbit-roaring.RoaringBitmap::from_range(0U, 30000U)
+  let b = @moonbit-roaring.RoaringBitmap::from_range(10000U, 50000U)
+  assert_eq(a.and_cardinality(b), b.and_cardinality(a))
+  assert_eq(a.or_cardinality(b), b.or_cardinality(a))
+  assert_eq(a.xor_cardinality(b), b.xor_cardinality(a))
+  // andnot is the one directional operation.
+  assert_eq(a.andnot_cardinality(b), 10000)
+  assert_eq(b.andnot_cardinality(a), 20000)
+}
+
+///|
+test "cardinality matches rank at the maximum element" {
+  // rank(max) is defined to equal size; the same identity must hold through
+  // the union cardinality of a bitmap with itself.
+  let a = @moonbit-roaring.RoaringBitmap::from_array([5U, 6U, 70000U])
+  assert_eq(a.or_cardinality(a), a.size())
+  assert_eq(a.and_cardinality(a), a.size())
+  assert_eq(a.xor_cardinality(a), 0)
+  assert_eq(a.andnot_cardinality(a), 0)
+}
+
+///|
+test "is_subset uses the andnot cardinality" {
+  let a = @moonbit-roaring.RoaringBitmap::from_array([1U, 2U, 3U])
+  let b = @moonbit-roaring.RoaringBitmap::from_array([1U, 2U, 3U, 4U])
+  assert_true(a.is_subset(b))
+  assert_false(b.is_subset(a))
+  assert_true(a.is_subset(a))
+  assert_true(
+    @moonbit-roaring.RoaringBitmap::new().is_subset(
+      @moonbit-roaring.RoaringBitmap::new(),
+    ),
+  )
+  // Cross-bucket and dense subsets must behave identically.
+  let dense = @moonbit-roaring.RoaringBitmap::from_range(0U, 40000U)
+  let wider = @moonbit-roaring.RoaringBitmap::from_range(0U, 50000U)
+  assert_true(dense.is_subset(wider))
+  assert_false(wider.is_subset(dense))
+}

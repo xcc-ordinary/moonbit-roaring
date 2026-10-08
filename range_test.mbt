@@ -228,3 +228,138 @@ test "from_range constructs the same bitmap as new + add_range" {
   let b = @moonbit-roaring.RoaringBitmap::new().add_range(100U, 200U)
   assert_true(a.equals(b))
 }
+
+// ============ flip: complement within a closed interval ============
+
+///|
+test "flip complements a sparse bitmap inside the interval" {
+  let bm = @moonbit-roaring.RoaringBitmap::from_array([10U, 11U, 12U, 20U])
+  // [10, 12] is present, so those three drop out; [13, 19] was absent, so
+  // it comes in; 20 sits outside the interval and is left alone.
+  let flipped = bm.flip(10U, 19U)
+  assert_eq(flipped.to_array(), [13U, 14U, 15U, 16U, 17U, 18U, 19U, 20U])
+}
+
+///|
+test "flip of an empty bitmap is the whole interval" {
+  let flipped = @moonbit-roaring.RoaringBitmap::new().flip(5U, 9U)
+  assert_eq(flipped.to_array(), [5U, 6U, 7U, 8U, 9U])
+  assert_eq(flipped.size(), 5)
+}
+
+///|
+test "flip is an involution" {
+  let bm = @moonbit-roaring.RoaringBitmap::from_array([3U, 4U, 100U, 101U])
+  let once = bm.flip(0U, 200U)
+  let twice = once.flip(0U, 200U)
+  assert_eq(twice.to_array(), bm.to_array())
+}
+
+///|
+test "flip leaves values outside the interval untouched" {
+  let bm = @moonbit-roaring.RoaringBitmap::from_array([1U, 2U, 500U, 501U])
+  let flipped = bm.flip(100U, 200U)
+  assert_true(flipped.contains(1U))
+  assert_true(flipped.contains(2U))
+  assert_true(flipped.contains(500U))
+  assert_true(flipped.contains(501U))
+  // The interval was empty before, so all 101 of its values arrive.
+  assert_true(flipped.contains(150U))
+  assert_eq(flipped.size(), 4 + 101)
+}
+
+///|
+test "flip size equals what lies outside plus the interval's complement" {
+  let bm = @moonbit-roaring.RoaringBitmap::from_range(1000U, 2000U)
+  let flipped = bm.flip(1500U, 2500U)
+  // [1500, 2500] holds 1001 values, 500 of them already present. Those 500
+  // drop out, the other 501 come in, and the 500 values below the interval
+  // are carried over untouched.
+  assert_eq(flipped.size(), 500 + 501)
+  assert_eq(flipped.and_cardinality(bm), 500)
+  assert_true(flipped.contains(1499U))
+  assert_false(flipped.contains(1500U))
+  assert_false(flipped.contains(1999U))
+  assert_true(flipped.contains(2000U))
+  assert_true(flipped.contains(2500U))
+}
+
+///|
+test "flip over a whole bucket empties that bucket" {
+  let bm = @moonbit-roaring.RoaringBitmap::from_range(0U, 65536U)
+  assert_eq(bm.get_stats().total_containers, 1)
+  let flipped = bm.flip(0U, 65535U)
+  assert_true(flipped.is_empty())
+  assert_eq(flipped.get_stats().total_containers, 0)
+}
+
+///|
+test "flip over a partially filled bucket keeps the gaps" {
+  // Complementing a bucket over its full range is "everything the bucket did
+  // not already hold" — not "nothing". Only a completely full bucket flips
+  // to empty, so these two cases must not collapse into one shortcut.
+  let bm = @moonbit-roaring.RoaringBitmap::from_array([0U, 65535U])
+  let flipped = bm.flip(0U, 65535U)
+  assert_eq(flipped.size(), 65534)
+  assert_false(flipped.contains(0U))
+  assert_false(flipped.contains(65535U))
+  assert_true(flipped.contains(1U))
+  assert_true(flipped.contains(65534U))
+  // Flipping again restores the original exactly.
+  assert_eq(flipped.flip(0U, 65535U).to_array(), bm.to_array())
+}
+
+///|
+test "flip across a bucket boundary complements each side locally" {
+  // Bucket 0 holds [0, 65535], bucket 1 holds [65536, 131071]. Flipping
+  // [65530, 65540] must treat the two halves independently.
+  let bm = @moonbit-roaring.RoaringBitmap::from_array([65535U, 65536U])
+  let flipped = bm.flip(65530U, 65540U)
+  // 65535 and 65536 were present and are gone; 65530..65534 and 65537..65540
+  // were absent and arrive.
+  assert_false(flipped.contains(65535U))
+  assert_false(flipped.contains(65536U))
+  assert_true(flipped.contains(65530U))
+  assert_true(flipped.contains(65540U))
+  assert_eq(flipped.size(), 11 - 2)
+}
+
+///|
+test "flip spanning many buckets complements each bucket locally" {
+  // [0, 300000] covers buckets 0 through 4. Every bucket that already holds
+  // data is complemented in place; every empty one is created from scratch.
+  let bm = @moonbit-roaring.RoaringBitmap::from_array([
+    0U, 65535U, 65536U, 131071U, 299999U, 300000U,
+  ])
+  let flipped = bm.flip(0U, 300000U)
+  assert_eq(flipped.size(), 300001 - 6)
+  for v in [0U, 65535U, 65536U, 131071U, 299999U, 300000U] {
+    assert_false(flipped.contains(v))
+  }
+  assert_true(flipped.contains(1U))
+  assert_true(flipped.contains(65534U))
+  assert_true(flipped.contains(150000U))
+  // Values past the interval are untouched.
+  assert_false(flipped.contains(300001U))
+  // Round-trips through the portable format.
+  let restored = match
+    @moonbit-roaring.RoaringBitmap::deserialize(flipped.serialize()) {
+    Ok(b) => b
+    Err(_) => fail("multi-bucket flip must serialize and parse back")
+  }
+  assert_eq(restored.to_array(), flipped.to_array())
+}
+
+///|
+test "flip with an inverted interval is empty" {
+  let bm = @moonbit-roaring.RoaringBitmap::from_array([1U, 2U, 3U])
+  assert_true(bm.flip(10U, 5U).is_empty())
+}
+
+///|
+test "flip of a single value toggles exactly that value" {
+  let bm = @moonbit-roaring.RoaringBitmap::from_array([7U])
+  assert_true(bm.flip(7U, 7U).is_empty())
+  let absent = @moonbit-roaring.RoaringBitmap::from_array([8U])
+  assert_eq(absent.flip(7U, 7U).to_array(), [7U, 8U])
+}

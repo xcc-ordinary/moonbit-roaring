@@ -269,3 +269,187 @@ pub fn RoaringBitmap::contains_range(
 pub fn RoaringBitmap::from_range(start : UInt, end : UInt) -> RoaringBitmap {
   RoaringBitmap::new().add_range(start, end)
 }
+
+// ============ Complement within a closed interval ============
+
+///|
+/// Local (bucket-relative) inclusive bounds of the *closed* interval
+/// `[start, end]` within the bucket identified by `key`. Caller guarantees
+/// the bucket actually intersects the interval.
+///
+/// Unlike `bucket_local_range` this never computes `end - 1`, so it stays
+/// correct when `end` is `UInt`'s maximum value — which is exactly the
+/// full-universe complement case.
+fn bucket_local_closed_range(
+  key : UInt16,
+  start : UInt,
+  end : UInt,
+) -> (Int, Int) {
+  let bucket_start = combine(key, (0 : UInt16))
+  let bucket_end = combine(key, (65535 : UInt16))
+  let lo = if start > bucket_start {
+    (start - bucket_start).reinterpret_as_int()
+  } else {
+    0
+  }
+  let hi = if end < bucket_end {
+    (end - bucket_start).reinterpret_as_int()
+  } else {
+    65535
+  }
+  (lo, hi)
+}
+
+///|
+/// Values in the local inclusive range `[lo, hi]` that are absent from the
+/// sorted array `existing`, produced by walking the gaps between `existing`'s
+/// values rather than by materializing the whole interval and differencing
+/// it. A full bucket therefore costs O(65536 - cardinality) instead of
+/// O(65536) plus a second pass.
+fn range_minus_sorted(
+  lo : Int,
+  hi : Int,
+  existing : Array[UInt16],
+) -> Array[UInt16] {
+  let result = []
+  let mut cursor = lo
+  for v in existing {
+    let vi = v.to_int()
+    if vi > hi {
+      break
+    }
+    if vi < cursor {
+      continue
+    }
+    while cursor < vi {
+      result.push(cursor.to_uint16())
+      cursor = cursor + 1
+    }
+    cursor = vi + 1
+  }
+  while cursor <= hi {
+    result.push(cursor.to_uint16())
+    cursor = cursor + 1
+  }
+  result
+}
+
+///|
+/// Complement of `c` restricted to the local inclusive range `[lo, hi]`.
+/// Returns `None` when the result is empty, so the caller can drop the
+/// bucket outright instead of storing an empty container.
+///
+/// Note there is no cheap "whole bucket" shortcut here, unlike
+/// `container_add_range`: unioning a bucket with its full range collapses to
+/// that range, but complementing a bucket over its full range yields
+/// "everything the bucket did not already hold", which is only empty when
+/// the bucket held everything to begin with.
+fn container_flip_range(c : Container, lo : Int, hi : Int) -> Container? {
+  let existing = container_to_sorted_array(c)
+  // Values outside [lo, hi] survive untouched.
+  let kept = []
+  for v in existing {
+    let vi = v.to_int()
+    if vi < lo || vi > hi {
+      kept.push(v)
+    }
+  }
+  // Inside [lo, hi], absent becomes present and present becomes absent.
+  let added = range_minus_sorted(lo, hi, existing)
+  let merged = sorted_union(kept, added)
+  if merged.length() == 0 {
+    None
+  } else {
+    Some(optimize_container(merged))
+  }
+}
+
+///|
+fn flip_range_in_bucket(
+  containers : Array[HighContainer],
+  key : UInt16,
+  lo : Int,
+  hi : Int,
+) -> Array[HighContainer] {
+  match find_bucket(containers, key) {
+    NotFound(pos) => {
+      // Nothing stored for this key yet, so the complement is simply the
+      // whole interval.
+      let new_container = optimize_container(range_to_array(lo, hi))
+      let new_bucket = HighContainer::{
+        key,
+        container: new_container,
+        cardinality: container_cardinality(new_container),
+      }
+      let new_containers = []
+      for i = 0; i < pos; i = i + 1 {
+        new_containers.push(containers[i])
+      }
+      new_containers.push(new_bucket)
+      for i = pos; i < containers.length(); i = i + 1 {
+        new_containers.push(containers[i])
+      }
+      new_containers
+    }
+    Found(idx) =>
+      match container_flip_range(containers[idx].container, lo, hi) {
+        None => {
+          let result = []
+          for i = 0; i < containers.length(); i = i + 1 {
+            if i != idx {
+              result.push(containers[i])
+            }
+          }
+          result
+        }
+        Some(new_container) => {
+          let new_bucket = HighContainer::{
+            key,
+            container: new_container,
+            cardinality: container_cardinality(new_container),
+          }
+          let new_containers = containers.copy()
+          new_containers[idx] = new_bucket
+          new_containers
+        }
+      }
+  }
+}
+
+///|
+/// Complement within the closed interval `[start, end]` — both bounds
+/// inclusive, matching CRoaring's `roaring_bitmap_flip(ra, start, end)`.
+///
+/// Values present inside the interval are dropped, values absent from it are
+/// added, and values outside the interval never appear in the result. In
+/// other words the result is `[start, end] \ self`, restricted to `[start,
+/// end]`.
+///
+/// Note the contrast with `add_range`/`remove_range`, which take half-open
+/// intervals: `flip` is closed because that is what the reference
+/// implementations expose, and because a closed interval is the only way to
+/// name a range that runs through `UInt`'s maximum value.
+///
+/// Be aware that `size()` returns a 32-bit signed `Int`, so a bitmap holding
+/// more than 2147483647 elements cannot report its own cardinality. Flipping
+/// the entire 32-bit universe (`flip(0U, 4294967295U)`) is therefore
+/// expressible but not countable — prefer the narrowest interval that
+/// answers your question.
+pub fn RoaringBitmap::flip(
+  self : RoaringBitmap,
+  start : UInt,
+  end : UInt,
+) -> RoaringBitmap {
+  if start > end {
+    return RoaringBitmap::new()
+  }
+  let high_start = extract_high(start).to_int()
+  let high_end = extract_high(end).to_int()
+  let mut containers = self.containers
+  for high = high_start; high <= high_end; high = high + 1 {
+    let key = high.to_uint16()
+    let (lo, hi) = bucket_local_closed_range(key, start, end)
+    containers = flip_range_in_bucket(containers, key, lo, hi)
+  }
+  { containers, size: rebuild_size(containers), }
+}

@@ -497,12 +497,16 @@ pub fn RoaringBitmap::equals(
 }
 
 ///|
-/// Check if self is a subset of other
+/// Check if self is a subset of other.
+///
+/// Uses `andnot_cardinality` rather than materializing the intersection:
+/// `self ⊆ other` holds exactly when nothing in `self` is missing from
+/// `other`, so the answer needs a count, not a bitmap.
 pub fn RoaringBitmap::is_subset(
   self : RoaringBitmap,
   other : RoaringBitmap,
 ) -> Bool {
-  self.intersect(other).size() == self.size
+  self.andnot_cardinality(other) == 0
 }
 
 ///|
@@ -512,11 +516,11 @@ pub fn RoaringBitmap::jaccard_similarity(
   self : RoaringBitmap,
   other : RoaringBitmap,
 ) -> Double {
-  let union_size = self.union(other).size()
+  let union_size = self.or_cardinality(other)
   if union_size == 0 {
     1.0
   } else {
-    self.intersect(other).size().to_double() / union_size.to_double()
+    self.and_cardinality(other).to_double() / union_size.to_double()
   }
 }
 
