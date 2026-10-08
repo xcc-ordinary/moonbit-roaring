@@ -61,6 +61,19 @@ let count_at_or_below_500 = restored.rank(500U)
 let fifth = restored.select(4)
 ```
 
+Counting questions do not need the result bitmap, so they have their own
+methods — `and_cardinality` and friends report a size without building one:
+
+```moonbit
+let matched_both = term_a.and_cardinality(term_b)
+let matched_either = term_a.or_cardinality(term_b)
+let only_in_a = term_a.andnot_cardinality(term_b)
+let differs = term_a.xor_cardinality(term_b)
+```
+
+`is_subset` and `jaccard_similarity` are built on these, so neither
+materializes an intersection just to read its length.
+
 Runnable user paths:
 
 ```bash
@@ -76,11 +89,42 @@ bitmap-level cumulative/order analytics respectively.
 
 - Array, Bitmap, and Run containers
 - standard set operations and multi-way union/intersection
+- cardinality-only variants (`and_cardinality`, `or_cardinality`,
+  `andnot_cardinality`, `xor_cardinality`) that count without building a
+  result bitmap
 - half-open range construction, mutation, and containment
+- closed-interval complement (`flip`)
 - lazy `Iter[UInt]`, bitmap-level `rank` and `select`
 - Roaring portable serialization and strict deserialization
 - immutable compatibility helpers: `clear`, inclusive `range`, Jaccard similarity
 - statistics exposing container choices and encoded payload sizes
+
+## Command line
+
+`cmd/main` drives the portable format from a shell. Bytes travel as hex, so
+there is no file I/O to configure and it runs on every target:
+
+```bash
+moon run cmd/main -- encode 1 100 1000
+# 3a30000001000000000002001000000001006400e803
+
+moon run cmd/main -- encode --start 0 --end 200000
+# 3b3003000f0000ffff0100ffff0200ffff0300...
+
+moon run cmd/main -- check 3a30000001000000000002001000000001006400e803
+# ok: 3 values in 22 bytes, byte-for-byte round trip
+
+moon run cmd/main -- info 3a30000001000000000002001000000001006400e803
+# values          3
+# min / max       1 / 1000
+# containers      1 (array 1, bitmap 0, run 0)
+# container bytes 6
+# serialized      22
+```
+
+`check` also cross-checks the bitmap's own query methods, so it reports
+internal disagreement as well as format drift. See
+[`docs/usage.md`](docs/usage.md) for the full reference.
 
 ## Verification evidence
 
@@ -129,6 +173,10 @@ the comparison document.
 - 32-bit unsigned values only; no Roaring64.
 - Portable format only; no native/frozen/mmap formats.
 - Immutable operations; no thread-safe mutable bitmap API.
+- `size()` returns a 32-bit signed `Int`, so a bitmap holding more than
+  2147483647 elements cannot report its own cardinality. Complementing the
+  whole 32-bit universe with `flip(0U, 4294967295U)` is expressible but not
+  countable; prefer the narrowest interval that answers the question.
 - No SIMD-specific kernels and no claim of outperforming other implementations.
 - The native target is not currently part of the verified matrix.
 

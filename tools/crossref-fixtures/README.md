@@ -27,6 +27,14 @@ Only needed if you add new fixture scenarios to `generate.mjs` (e.g. a new
 container-size boundary) or bump the `roaring-wasm` version. The checked-in
 `golden_fixtures_test.mbt` does not need regeneration for normal development.
 
+## Provenance and licence
+
+`roaring-wasm` is Apache-2.0, the same licence as this project, so the
+generated fixtures carry no additional obligations. `node_modules/` is
+gitignored and never distributed: only `generate.mjs`, `to_mbt.mjs` and the
+generated `golden_fixtures_test.mbt` are checked in, and the latter contains
+byte literals rather than any upstream source.
+
 ## Why `runOptimize()` matters
 
 CRoaring does not auto-detect consecutive runs on construction — a bitmap

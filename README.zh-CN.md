@@ -57,6 +57,19 @@ let count_at_or_below_500 = restored.rank(500U)
 let fifth = restored.select(4)
 ```
 
+计数类问题不需要结果位图本身，因此有单独的方法——`and_cardinality` 等只返回基数，
+不构造任何中间位图：
+
+```moonbit
+let matched_both = term_a.and_cardinality(term_b)
+let matched_either = term_a.or_cardinality(term_b)
+let only_in_a = term_a.andnot_cardinality(term_b)
+let differs = term_a.xor_cardinality(term_b)
+```
+
+`is_subset` 和 `jaccard_similarity` 都建立在这些方法之上，因此都不会为了读一个长度
+而物化整个交集。
+
 三个可运行用户路径：
 
 ```bash
@@ -71,11 +84,40 @@ moon run examples/analytics
 
 - Array、Bitmap、Run 三种容器
 - 标准集合运算与多路并集/交集
+- 只算基数的集合运算（`and_cardinality`、`or_cardinality`、`andnot_cardinality`、
+  `xor_cardinality`），不构造结果位图
 - 半开区间构造、修改和包含判断
+- 闭区间补集 `flip`
 - 惰性 `Iter[UInt]`、bitmap 级 `rank` 和 `select`
 - Roaring portable 序列化与严格反序列化
 - 不修改原对象的兼容 API：`clear`、闭区间 `range`、Jaccard 相似度
 - 容器选择和编码 payload 大小统计
+
+## 命令行
+
+`cmd/main` 在命令行直接驱动 portable 格式。字节以十六进制传递，不需要配置文件 I/O，
+各目标都能运行：
+
+```bash
+moon run cmd/main -- encode 1 100 1000
+# 3a30000001000000000002001000000001006400e803
+
+moon run cmd/main -- encode --start 0 --end 200000
+# 3b3003000f0000ffff0100ffff0200ffff0300...
+
+moon run cmd/main -- check 3a30000001000000000002001000000001006400e803
+# ok: 3 values in 22 bytes, byte-for-byte round trip
+
+moon run cmd/main -- info 3a30000001000000000002001000000001006400e803
+# values          3
+# min / max       1 / 1000
+# containers      1 (array 1, bitmap 0, run 0)
+# container bytes 6
+# serialized      22
+```
+
+`check` 还会交叉校验位图自身的查询方法，因此既能发现格式漂移，也能发现内部不一致。
+完整说明见 [`docs/usage.md`](docs/usage.md)。
 
 ## 可复现证据
 
@@ -122,6 +164,9 @@ moon bench --release --target wasm
 - 只支持 32 位无符号整数，不支持 Roaring64。
 - 只支持 portable 格式，不提供 native/frozen/mmap 格式。
 - 提供不可变操作，不提供线程安全的可变位图 API。
+- `size()` 返回 32 位有符号 `Int`，因此元素数超过 2147483647 的位图无法报告自身基数。
+  用 `flip(0U, 4294967295U)` 求整个 32 位全域的补集是可以表达的，但结果无法计数；
+  请尽量使用能回答问题的最窄区间。
 - 尚无 SIMD 专用内核，也不宣称性能优于其他实现。
 - 当前验证矩阵不包含 native 目标。
 
