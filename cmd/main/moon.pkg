@@ -1,5 +1,6 @@
-// import {
-//   "xcc-ordinary/moonbit-roaring" @lib,
-// }
+import {
+  "xcc-ordinary/moonbit-roaring" @roaring,
+  "moonbitlang/core/argparse",
+}
 
 pkgtype(kind: "executable")
