@@ -16,6 +16,8 @@ pub let run_container_min_run_length : Int
 
 // Types and methods
 type HighContainer derive(Eq)
+pub fn HighContainer::equal(Self, Self) -> Bool
+pub fn HighContainer::not_equal(Self, Self) -> Bool
 
 pub struct RoaringBitmap {
   containers : Array[HighContainer]
@@ -29,6 +31,7 @@ pub fn RoaringBitmap::contains(Self, UInt) -> Bool
 pub fn RoaringBitmap::contains_range(Self, UInt, UInt) -> Bool
 pub fn RoaringBitmap::deserialize(Bytes) -> Result[Self, RoaringError]
 pub fn RoaringBitmap::difference(Self, Self) -> Self
+pub fn RoaringBitmap::equal(Self, Self) -> Bool
 pub fn RoaringBitmap::equals(Self, Self) -> Bool
 pub fn RoaringBitmap::from_array(Array[UInt]) -> Self
 pub fn RoaringBitmap::from_range(UInt, UInt) -> Self
@@ -42,6 +45,7 @@ pub fn RoaringBitmap::jaccard_similarity(Self, Self) -> Double
 pub fn RoaringBitmap::max(Self) -> UInt?
 pub fn RoaringBitmap::min(Self) -> UInt?
 pub fn RoaringBitmap::new() -> Self
+pub fn RoaringBitmap::not_equal(Self, Self) -> Bool
 pub fn RoaringBitmap::range(Self, UInt, UInt) -> Self
 pub fn RoaringBitmap::rank(Self, UInt) -> Int
 pub fn RoaringBitmap::remove(Self, UInt) -> Self
@@ -58,6 +62,11 @@ pub fn RoaringBitmap::xor(Self, Self) -> Self
 pub enum RoaringError {
   DeserializationError(String)
 } derive(Eq, @debug.Debug)
+pub fn RoaringError::equal(Self, Self) -> Bool
+pub fn RoaringError::not_equal(Self, Self) -> Bool
+pub fn RoaringError::output(Self, &Logger) -> Unit
+pub fn RoaringError::to_repr(Self) -> @debug.Repr
+pub fn RoaringError::to_string(Self) -> String
 pub impl Show for RoaringError
 
 pub struct RoaringStats {
@@ -68,11 +77,15 @@ pub struct RoaringStats {
   total_bytes_used : Int
   compression_ratio : Double
 } derive(@debug.Debug)
+pub fn RoaringStats::to_repr(Self) -> @debug.Repr
 
 pub struct Run {
   start : UInt16
   length : UInt16
 } derive(Eq, @debug.Debug)
+pub fn Run::equal(Self, Self) -> Bool
+pub fn Run::not_equal(Self, Self) -> Bool
+pub fn Run::to_repr(Self) -> @debug.Repr
 
 // Type aliases
 

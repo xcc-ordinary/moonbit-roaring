@@ -32,6 +32,14 @@ pub struct Run {
 } derive(Eq, Debug)
 
 ///|
+/// `derive` promotes trait methods onto the type; declaring them here makes
+/// that promotion explicit instead of relying on the deprecated implicit form.
+pub extend Run with Eq::{equal, not_equal}
+
+///|
+pub extend Run with Debug::{to_repr}
+
+///|
 /// High-level container: associates a 16-bit key with a container
 /// RoaringBitmap partitions 32-bit integers into:
 /// - high 16 bits → key (bucket index)
@@ -43,11 +51,17 @@ struct HighContainer {
 } derive(Eq)
 
 ///|
+pub extend HighContainer with Eq::{equal, not_equal}
+
+///|
 /// The main RoaringBitmap structure
 pub struct RoaringBitmap {
   containers : Array[HighContainer] // sorted by key
   size : Int // total cardinality across all containers
 } derive(Eq)
+
+///|
+pub extend RoaringBitmap with Eq::{equal, not_equal}
 
 ///|
 /// Error types
@@ -56,12 +70,21 @@ pub enum RoaringError {
 } derive(Eq, Debug)
 
 ///|
+pub extend RoaringError with Eq::{equal, not_equal}
+
+///|
+pub extend RoaringError with Debug::{to_repr}
+
+///|
 pub impl Show for RoaringError with fn output(self, logger) {
   match self {
     DeserializationError(msg) =>
       logger.write_string("DeserializationError: " + msg)
   }
 }
+
+///|
+pub extend RoaringError with Show::{to_string, output}
 
 ///|
 /// Binary search result for sorted arrays/container lists
@@ -80,3 +103,6 @@ pub struct RoaringStats {
   total_bytes_used : Int
   compression_ratio : Double // vs. naive bitmap
 } derive(Debug)
+
+///|
+pub extend RoaringStats with Debug::{to_repr}
