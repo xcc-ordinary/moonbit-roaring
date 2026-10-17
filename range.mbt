@@ -62,93 +62,6 @@ fn container_add_range(c : Container, lo : Int, hi : Int) -> Container {
 }
 
 ///|
-fn add_range_to_bucket(
-  containers : Array[HighContainer],
-  key : UInt16,
-  lo : Int,
-  hi : Int,
-) -> Array[HighContainer] {
-  match find_bucket(containers, key) {
-    Found(idx) => {
-      let bucket = containers[idx]
-      let new_container = container_add_range(bucket.container, lo, hi)
-      let new_bucket = HighContainer::{
-        key,
-        container: new_container,
-        cardinality: container_cardinality(new_container),
-      }
-      let new_containers = containers.copy()
-      new_containers[idx] = new_bucket
-      new_containers
-    }
-    NotFound(pos) => {
-      let new_container = if lo == 0 && hi == 65535 {
-        full_run_container()
-      } else {
-        optimize_container(range_to_array(lo, hi))
-      }
-      let new_bucket = HighContainer::{
-        key,
-        container: new_container,
-        cardinality: container_cardinality(new_container),
-      }
-      let new_containers = []
-      for i = 0; i < pos; i = i + 1 {
-        new_containers.push(containers[i])
-      }
-      new_containers.push(new_bucket)
-      for i = pos; i < containers.length(); i = i + 1 {
-        new_containers.push(containers[i])
-      }
-      new_containers
-    }
-  }
-}
-
-///|
-fn remove_range_from_bucket(
-  containers : Array[HighContainer],
-  key : UInt16,
-  lo : Int,
-  hi : Int,
-) -> Array[HighContainer] {
-  match find_bucket(containers, key) {
-    NotFound(_) => containers
-    Found(idx) => {
-      let drop_bucket = fn() {
-        let result = []
-        for i = 0; i < containers.length(); i = i + 1 {
-          if i != idx {
-            result.push(containers[i])
-          }
-        }
-        result
-      }
-      if lo == 0 && hi == 65535 {
-        drop_bucket()
-      } else {
-        let bucket = containers[idx]
-        let existing = container_to_sorted_array(bucket.container)
-        let new_arr = sorted_difference(existing, range_to_array(lo, hi))
-        if new_arr.length() == 0 {
-          drop_bucket()
-        } else {
-          let new_container = optimize_container(new_arr)
-          let new_bucket = HighContainer::{
-            key,
-            container: new_container,
-            cardinality: container_cardinality(new_container),
-          }
-          let new_containers = containers.copy()
-          new_containers[idx] = new_bucket
-          new_containers
-        }
-      }
-    }
-  }
-}
-
-///|
 /// Whether every value in the local inclusive range [lo, hi] is present in
 /// `c`, without decoding the container to an intermediate array.
 fn container_contains_range(c : Container, lo : Int, hi : Int) -> Bool {
@@ -191,6 +104,11 @@ fn container_contains_range(c : Container, lo : Int, hi : Int) -> Bool {
 /// the fast path that makes bulk-loading a consecutive ID range (a common
 /// pattern for time-series data and sequentially-assigned IDs) cheap.
 ///
+/// The whole range is merged into the container list in one walk, so the cost
+/// is O(buckets touched + existing containers) rather than a rebuild of the
+/// list per bucket — the difference between a millisecond and half a minute
+/// when laying down the entire 32-bit space.
+///
 /// Note: because `end` is exclusive, this cannot express a range that
 /// extends through UInt's maximum value (4294967295) — `end` would have to
 /// overflow. Use `add` for that specific boundary value if needed.
@@ -204,18 +122,64 @@ pub fn RoaringBitmap::add_range(
   }
   let high_start = extract_high(start).to_int()
   let high_end = extract_high(end - 1U).to_int()
-  let mut containers = self.containers
+  let result_containers = []
+  let mut ci = 0
   for high = high_start; high <= high_end; high = high + 1 {
     let key = high.to_uint16()
     let (lo, hi) = bucket_local_range(key, start, end)
-    containers = add_range_to_bucket(containers, key, lo, hi)
+    // Carry over every container that sorts before this key.
+    while ci < self.containers.length() && self.containers[ci].key < key {
+      result_containers.push(self.containers[ci])
+      ci = ci + 1
+    }
+    let has_bucket = ci < self.containers.length() &&
+      self.containers[ci].key == key
+    let new_container = if has_bucket {
+      let existing = self.containers[ci].container
+      ci = ci + 1
+      container_add_range(existing, lo, hi)
+    } else if lo == 0 && hi == 65535 {
+      // A bucket the range covers completely is one Run, no decode.
+      full_run_container()
+    } else {
+      optimize_container(range_to_array(lo, hi))
+    }
+    result_containers.push(HighContainer::{
+      key,
+      container: new_container,
+      cardinality: container_cardinality(new_container),
+    })
   }
-  { containers, size: rebuild_size(containers), }
+  while ci < self.containers.length() {
+    result_containers.push(self.containers[ci])
+    ci = ci + 1
+  }
+  { containers: result_containers, size: rebuild_size(result_containers), }
+}
+
+///|
+/// Remove the local inclusive range `[lo, hi]` from a container. Returns
+/// `None` when nothing is left, so the caller can drop the bucket outright
+/// instead of storing an empty container.
+fn container_remove_range(c : Container, lo : Int, hi : Int) -> Container? {
+  if lo == 0 && hi == 65535 {
+    // Removing every value of a bucket leaves nothing behind.
+    None
+  } else {
+    let existing = container_to_sorted_array(c)
+    let remaining = sorted_difference(existing, range_to_array(lo, hi))
+    if remaining.length() == 0 {
+      None
+    } else {
+      Some(optimize_container(remaining))
+    }
+  }
 }
 
 ///|
 /// Remove every integer in the half-open range `[start, end)`. A bucket
-/// fully covered by the range is dropped outright rather than decoded.
+/// fully covered by the range is dropped outright rather than decoded, and the
+/// whole range is merged into the container list in one walk.
 pub fn RoaringBitmap::remove_range(
   self : RoaringBitmap,
   start : UInt,
@@ -226,13 +190,35 @@ pub fn RoaringBitmap::remove_range(
   }
   let high_start = extract_high(start).to_int()
   let high_end = extract_high(end - 1U).to_int()
-  let mut containers = self.containers
+  let result_containers = []
+  let mut ci = 0
   for high = high_start; high <= high_end; high = high + 1 {
     let key = high.to_uint16()
     let (lo, hi) = bucket_local_range(key, start, end)
-    containers = remove_range_from_bucket(containers, key, lo, hi)
+    while ci < self.containers.length() && self.containers[ci].key < key {
+      result_containers.push(self.containers[ci])
+      ci = ci + 1
+    }
+    // A key with no bucket has nothing to remove.
+    if ci < self.containers.length() && self.containers[ci].key == key {
+      let existing = self.containers[ci].container
+      ci = ci + 1
+      match container_remove_range(existing, lo, hi) {
+        None => ()
+        Some(new_container) =>
+          result_containers.push(HighContainer::{
+            key,
+            container: new_container,
+            cardinality: container_cardinality(new_container),
+          })
+      }
+    }
   }
-  { containers, size: rebuild_size(containers), }
+  while ci < self.containers.length() {
+    result_containers.push(self.containers[ci])
+    ci = ci + 1
+  }
+  { containers: result_containers, size: rebuild_size(result_containers), }
 }
 
 ///|

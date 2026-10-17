@@ -6,66 +6,46 @@
 // empty, `select` reported every index as out of range on a provably
 // non-empty bitmap, and `rank` reported a negative count.
 //
-// The fixture is built by writing portable bytes directly instead of calling
-// `add_range`, which is quadratic in the number of buckets touched and would
-// take the better part of a minute to lay down 32768 containers.
+// The fixture is built with a single `add_range` call. It used to be
+// assembled by writing portable bytes by hand, because `add_range` was
+// quadratic in the number of buckets touched and took the better part of a
+// minute to lay down 32768 containers; it now takes milliseconds.
 
 ///|
 /// 32768 buckets, each holding all 65536 of its values as a single Run:
 /// exactly 2^31 elements, the point where a 32-bit signed `Int` wraps.
 fn overflowing_bitmap() -> @moonbit-roaring.RoaringBitmap {
-  let buckets = 32768
-  let buf = @buffer.Buffer::Buffer()
-  // SERIAL_COOKIE layout: low 16 bits are the cookie, high 16 bits are
-  // (container count - 1).
-  buf.write_uint_le(12347U | ((buckets - 1).reinterpret_as_uint() << 16))
-  // One run-flag byte per 8 containers, all set: every container is a Run.
-  for _i = 0; _i < (buckets + 7) / 8; _i = _i + 1 {
-    buf.write_byte(0xFF)
-  }
-  // Descriptive header: (key, cardinality - 1) per container.
-  for k = 0; k < buckets; k = k + 1 {
-    buf.write_uint16_le(k.to_uint16())
-    buf.write_uint16_le((65535 : UInt16))
-  }
-  // Offset header: with runs present it is written once the count reaches 4.
-  let mut offset = 4 + 8 * buckets + (buckets + 7) / 8
-  for _k = 0; _k < buckets; _k = _k + 1 {
-    buf.write_uint_le(offset.reinterpret_as_uint())
-    offset = offset + 6
-  }
-  // Container data: a single run covering the whole bucket, 6 bytes each.
-  for _k = 0; _k < buckets; _k = _k + 1 {
-    buf.write_uint16_le((1 : UInt16))
-    buf.write_uint16_le((0 : UInt16))
-    buf.write_uint16_le((65535 : UInt16))
-  }
-  match @moonbit-roaring.RoaringBitmap::deserialize(buf.to_bytes()) {
-    Ok(b) => b
-    Err(e) => {
-      // `panic` takes no message on this toolchain, so print first.
-      println("fixture rejected by the decoder: \{e}")
-      panic()
-    }
-  }
+  @moonbit-roaring.RoaringBitmap::new().add_range(0U, 2147483648U)
 }
 
 ///|
-test "the overflowing fixture decodes to 32768 full Run containers" {
+test "the overflowing fixture is 32768 full Run containers" {
   let bm = overflowing_bitmap()
   let stats = bm.get_stats()
   assert_eq(stats.total_containers, 32768)
   assert_eq(stats.run_containers, 32768)
   assert_eq(stats.array_containers, 0)
   assert_eq(stats.bitmap_containers, 0)
-  // Re-serializing reproduces the exact bytes the decoder accepted:
-  // cookie + run flags + descriptive header + offset header + container data.
-  // The descriptive header is 4 bytes per container (key + cardinality), and
-  // the offset header another 4.
-  assert_eq(
-    bm.serialize().length(),
-    4 + 4096 + 4 * 32768 + 4 * 32768 + 6 * 32768,
-  )
+}
+
+///|
+test "the overflowing fixture survives a portable round trip" {
+  // Also covers the decoder at a container count far past anything the other
+  // fixtures reach.
+  let bm = overflowing_bitmap()
+  let bytes = bm.serialize()
+  let restored = match @moonbit-roaring.RoaringBitmap::deserialize(bytes) {
+    Ok(b) => b
+    Err(_) => {
+      println("2^31-element bitmap was rejected by the decoder")
+      panic()
+    }
+  }
+  assert_eq(restored.get_stats().total_containers, 32768)
+  assert_eq(restored.serialize(), bytes)
+  assert_true(restored.contains(0U))
+  assert_true(restored.contains(2147483647U))
+  assert_eq(restored.min(), Some(0U))
 }
 
 ///|

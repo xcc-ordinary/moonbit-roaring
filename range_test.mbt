@@ -369,3 +369,109 @@ test "flip of a single value toggles exactly that value" {
   let absent = @moonbit-roaring.RoaringBitmap::from_array([8U])
   assert_eq(absent.flip(7U, 7U).to_array(), [7U, 8U])
 }
+
+// ============ add_range / remove_range as a single merge walk ============
+//
+// Both operations assemble the result container list in one pass, so they are
+// linear in the buckets touched rather than rebuilding the list per bucket.
+// These tests pin that against the operations they are defined in terms of.
+
+///|
+fn range_lcg(seed : Int) -> Int {
+  let raw = seed * 1103515245 + 12345
+  if raw < 0 {
+    -raw % 1000000
+  } else {
+    raw % 1000000
+  }
+}
+
+///|
+test "add_range equals union with the interval, on randomized inputs" {
+  let mut seed = 31
+  for _trial = 0; _trial < 40; _trial = _trial + 1 {
+    seed = range_lcg(seed)
+    let count = 1 + seed % 120
+    let base = []
+    for _i = 0; _i < count; _i = _i + 1 {
+      seed = range_lcg(seed)
+      base.push((seed % 400000).reinterpret_as_uint())
+    }
+    seed = range_lcg(seed)
+    let a = (seed % 400000).reinterpret_as_uint()
+    seed = range_lcg(seed)
+    let b = (seed % 400000).reinterpret_as_uint()
+    let lo = if a < b { a } else { b }
+    let hi = if a < b { b } else { a }
+    let start = @moonbit-roaring.RoaringBitmap::from_array(base)
+    let via_range = start.add_range(lo, hi)
+    let via_union = start.union(
+      @moonbit-roaring.RoaringBitmap::from_range(lo, hi),
+    )
+    assert_eq(via_range.to_array(), via_union.to_array())
+    assert_eq(via_range.serialize(), via_union.serialize())
+  }
+}
+
+///|
+test "remove_range equals difference with the interval, on randomized inputs" {
+  let mut seed = 77
+  for _trial = 0; _trial < 40; _trial = _trial + 1 {
+    seed = range_lcg(seed)
+    let count = 1 + seed % 120
+    let base = []
+    for _i = 0; _i < count; _i = _i + 1 {
+      seed = range_lcg(seed)
+      base.push((seed % 400000).reinterpret_as_uint())
+    }
+    seed = range_lcg(seed)
+    let a = (seed % 400000).reinterpret_as_uint()
+    seed = range_lcg(seed)
+    let b = (seed % 400000).reinterpret_as_uint()
+    let lo = if a < b { a } else { b }
+    let hi = if a < b { b } else { a }
+    let start = @moonbit-roaring.RoaringBitmap::from_array(base)
+    let via_range = start.remove_range(lo, hi)
+    let via_diff = start.difference(
+      @moonbit-roaring.RoaringBitmap::from_range(lo, hi),
+    )
+    assert_eq(via_range.to_array(), via_diff.to_array())
+    assert_eq(via_range.serialize(), via_diff.serialize())
+  }
+}
+
+///|
+test "add_range then remove_range round-trips on a disjoint interval" {
+  let bm = @moonbit-roaring.RoaringBitmap::from_array([
+    5U, 100U, 70000U, 200000U,
+  ])
+  let grown = bm.add_range(300000U, 400000U)
+  assert_eq(grown.remove_range(300000U, 400000U).to_array(), bm.to_array())
+  // An overlapping interval removes the original values inside it too, and
+  // leaves the ones outside it alone.
+  let overlapping = bm.add_range(1000U, 300000U)
+  assert_eq(overlapping.remove_range(1000U, 300000U).to_array(), [5U, 100U])
+}
+
+///|
+test "remove_range drops a fully covered bucket" {
+  // The end is exclusive, so 131072 needs 131073 to be included.
+  let one = @moonbit-roaring.RoaringBitmap::from_array([1U, 65536U, 131072U])
+  assert_eq(one.remove_range(65536U, 131073U).to_array(), [1U])
+  assert_eq(one.remove_range(0U, 131073U).to_array(), [])
+  assert_true(one.remove_range(0U, 131073U).is_empty())
+  // Removing a range that matches no bucket leaves the bitmap alone.
+  assert_eq(one.remove_range(900000U, 900100U).to_array(), one.to_array())
+}
+
+///|
+test "the whole 32-bit space is one add_range call" {
+  let all = @moonbit-roaring.RoaringBitmap::new()
+    .add_range(0U, 4294967295U)
+    .add(4294967295U)
+  assert_eq(all.get_stats().total_containers, 65536)
+  assert_true(all.contains(0U))
+  assert_true(all.contains(4294967295U))
+  assert_eq(all.min(), Some(0U))
+  assert_eq(all.max(), Some(4294967295U))
+}
