@@ -51,7 +51,7 @@ pub fn RoaringBitmap::new() -> Self
 pub fn RoaringBitmap::not_equal(Self, Self) -> Bool
 pub fn RoaringBitmap::or_cardinality(Self, Self) -> Int64
 pub fn RoaringBitmap::range(Self, UInt, UInt) -> Self
-pub fn RoaringBitmap::rank(Self, UInt) -> Int
+pub fn RoaringBitmap::rank(Self, UInt) -> Int64
 pub fn RoaringBitmap::remove(Self, UInt) -> Self
 pub fn RoaringBitmap::remove_range(Self, UInt, UInt) -> Self
 pub fn RoaringBitmap::select(Self, Int) -> UInt?

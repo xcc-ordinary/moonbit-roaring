@@ -239,9 +239,13 @@ pub fn RoaringBitmap::size(self : RoaringBitmap) -> Int {
 }
 
 ///|
-/// Check if empty
+/// Check if empty.
+///
+/// Tests the container list rather than `size`: `size` is a 32-bit `Int` that
+/// wraps past 2^31 elements, so a full 32-bit universe would otherwise report
+/// itself as empty while `contains`, `min` and `max` disagreed.
 pub fn RoaringBitmap::is_empty(self : RoaringBitmap) -> Bool {
-  self.size == 0
+  self.containers.length() == 0
 }
 
 ///|

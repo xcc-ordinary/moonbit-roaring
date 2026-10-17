@@ -75,7 +75,7 @@ test "rank counts elements less than or equal to value" {
 ///|
 test "rank of the maximum element equals size" {
   let bm = @moonbit-roaring.RoaringBitmap::from_array([7U, 42U, 999U])
-  assert_eq(bm.rank(bm.max().unwrap()), bm.size())
+  assert_eq(bm.rank(bm.max().unwrap()), Int64::from_int(bm.size()))
 }
 
 ///|
@@ -194,6 +194,6 @@ test "rank and select are inverse operations for present elements" {
   ])
   for v in bm.to_array() {
     let r = bm.rank(v)
-    assert_eq(bm.select(r - 1), Some(v))
+    assert_eq(bm.select(r.to_int() - 1), Some(v))
   }
 }

@@ -214,7 +214,7 @@ fn run_check(hex : String) -> Unit {
   match bitmap.max() {
     None => ()
     Some(m) =>
-      if bitmap.rank(m) != bitmap.size() {
+      if bitmap.rank(m) != Int64::from_int(bitmap.size()) {
         report("rank(max) does not equal size")
         return
       }

@@ -125,16 +125,21 @@ pub fn RoaringBitmap::iter(self : RoaringBitmap) -> Iter[UInt] {
 ///|
 /// Number of elements <= `value` (CRoaring calls this `rank`). For example,
 /// `bm.rank(bm.max().unwrap())` equals `bm.size()`.
-pub fn RoaringBitmap::rank(self : RoaringBitmap, value : UInt) -> Int {
+///
+/// Returns `Int64` for the same reason the `*_cardinality` methods do: a
+/// bitmap can hold up to 2^32 values, which does not fit in MoonBit's 32-bit
+/// signed `Int`, and a wrapped accumulator would report a negative count.
+/// CRoaring's counterpart returns `uint64_t`.
+pub fn RoaringBitmap::rank(self : RoaringBitmap, value : UInt) -> Int64 {
   let high = extract_high(value)
   let low = extract_low(value)
-  let mut count = 0
+  let mut count = 0L
   for i = 0; i < self.containers.length(); i = i + 1 {
     let hc = self.containers[i]
     if hc.key < high {
-      count = count + hc.cardinality
+      count = count + Int64::from_int(hc.cardinality)
     } else if hc.key == high {
-      return count + container_rank(hc.container, low)
+      return count + Int64::from_int(container_rank(hc.container, low))
     } else {
       return count
     }
@@ -145,9 +150,13 @@ pub fn RoaringBitmap::rank(self : RoaringBitmap, value : UInt) -> Int {
 ///|
 /// The `index`-th smallest element (0-indexed), or `None` if `index` is out
 /// of bounds. Inverse of `rank` in the sense that
-/// `bm.select(bm.rank(x) - 1) == Some(x)` whenever `bm.contains(x)`.
+/// `bm.select(bm.rank(x).to_int() - 1) == Some(x)` whenever `bm.contains(x)`.
+///
+/// The bounds check tests `containers` rather than `size`: `size` is a 32-bit
+/// `Int` that wraps past 2^31 elements, and a wrapped value would make every
+/// index look out of range on a provably non-empty bitmap.
 pub fn RoaringBitmap::select(self : RoaringBitmap, index : Int) -> UInt? {
-  if index < 0 || index >= self.size {
+  if index < 0 || self.containers.length() == 0 {
     return None
   }
   let mut remaining = index
