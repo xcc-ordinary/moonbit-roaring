@@ -305,6 +305,38 @@ fn container_cardinality(c : Container) -> Int {
 }
 
 ///|
+/// Index of the lowest set bit in a non-zero word, or -1 if the word is zero.
+fn lowest_set_bit(word : UInt64) -> Int {
+  if word == 0UL {
+    -1
+  } else {
+    let mut w = word
+    let mut bit = 0
+    while (w & 1UL) == 0UL {
+      w = w >> 1
+      bit = bit + 1
+    }
+    bit
+  }
+}
+
+///|
+/// Index of the highest set bit in a non-zero word, or -1 if the word is zero.
+fn highest_set_bit(word : UInt64) -> Int {
+  if word == 0UL {
+    -1
+  } else {
+    let mut w = word
+    let mut bit = 63
+    while (w & (1UL << 63)) == 0UL {
+      w = w << 1
+      bit = bit - 1
+    }
+    bit
+  }
+}
+
+///|
 fn container_contains(c : Container, value : UInt16) -> Bool {
   match c {
     Array(arr) =>
@@ -318,17 +350,37 @@ fn container_contains(c : Container, value : UInt16) -> Bool {
       (bm[idx] & (1UL << bit)) != 0UL
     }
     Run(runs) => {
-      let mut found = false
+      // Runs are sorted and disjoint, so a binary search finds the only run
+      // that could contain the value instead of scanning all of them.
       let v = value.to_int()
-      for r in runs {
-        let start = r.start.to_int()
-        let end = start + r.length.to_int()
-        if v >= start && v <= end {
-          found = true
+      let mut left = 0
+      let mut right = runs.length()
+      while left < right {
+        let mid = (left + right) / 2
+        let start = runs[mid].start.to_int()
+        if v < start {
+          right = mid
+        } else if v > start + runs[mid].length.to_int() {
+          left = mid + 1
+        } else {
+          return true
         }
       }
-      found
+      false
     }
+  }
+}
+
+///|
+/// Whether two containers hold exactly the same values. Same-type pairs are
+/// compared structurally, which is O(compressed size); only containers stored
+/// under different representations are decoded.
+fn container_equals_content(a : Container, b : Container) -> Bool {
+  match (a, b) {
+    (Array(x), Array(y)) => x == y
+    (Bitmap(x), Bitmap(y)) => x == y
+    (Run(x), Run(y)) => x == y
+    _ => container_to_sorted_array(a) == container_to_sorted_array(b)
   }
 }
 
@@ -367,12 +419,17 @@ fn container_is_subset(a : Container, b : Container) -> Bool {
 fn container_min(c : Container) -> UInt16? {
   match c {
     Array(arr) => if arr.length() == 0 { None } else { Some(arr[0]) }
+    // Scanning for the first non-zero word is O(1024) with no allocation,
+    // where decoding to an array is O(65536) plus a 65536-element array.
     Bitmap(bm) => {
-      let arr = bitmap_to_array(bm)
-      if arr.length() == 0 {
+      let mut i = 0
+      while i < bm.length() && bm[i] == 0UL {
+        i = i + 1
+      }
+      if i >= bm.length() {
         None
       } else {
-        Some(arr[0])
+        Some((i * 64 + lowest_set_bit(bm[i])).to_uint16())
       }
     }
     Run(runs) => if runs.length() == 0 { None } else { Some(runs[0].start) }
@@ -389,11 +446,14 @@ fn container_max(c : Container) -> UInt16? {
         Some(arr[arr.length() - 1])
       }
     Bitmap(bm) => {
-      let arr = bitmap_to_array(bm)
-      if arr.length() == 0 {
+      let mut i = bm.length() - 1
+      while i >= 0 && bm[i] == 0UL {
+        i = i - 1
+      }
+      if i < 0 {
         None
       } else {
-        Some(arr[arr.length() - 1])
+        Some((i * 64 + highest_set_bit(bm[i])).to_uint16())
       }
     }
     Run(runs) =>

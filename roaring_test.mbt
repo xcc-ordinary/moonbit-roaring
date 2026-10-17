@@ -492,3 +492,141 @@ test "add_many spreads one value per bucket across many containers" {
   assert_eq(bm.min(), Some(0U))
   assert_eq(bm.max(), Some((19999 * 65536).reinterpret_as_uint()))
 }
+
+// ============ content equality across representations ============
+
+///|
+/// Build portable bytes that store `count` consecutive values in one bucket as
+/// an ARRAY container. `from_range` of the same values produces a Run, so this
+/// is how a test gets two bitmaps with identical content but different
+/// internal layout — the case `equals` exists for.
+fn array_container_bytes(count : Int) -> Bytes {
+  let buf = @buffer.Buffer::Buffer()
+  buf.write_uint_le(12346U) // no-run cookie
+  buf.write_uint_le(1U) // one container
+  buf.write_uint16_le((0 : UInt16)) // key 0
+  buf.write_uint16_le((count - 1).to_uint16()) // cardinality - 1
+  // cookie + count + descriptive header + offset header
+  buf.write_uint_le((8 + 8).reinterpret_as_uint())
+  for i = 0; i < count; i = i + 1 {
+    buf.write_uint16_le(i.to_uint16())
+  }
+  buf.to_bytes()
+}
+
+///|
+test "equals compares content, not container layout" {
+  let canonical = @moonbit-roaring.RoaringBitmap::from_range(0U, 4096U)
+  let as_array = match
+    @moonbit-roaring.RoaringBitmap::deserialize(array_container_bytes(4096)) {
+    Ok(b) => b
+    Err(e) => {
+      println("fixture rejected: \{e}")
+      panic()
+    }
+  }
+  // Same values, deliberately different representations.
+  assert_eq(canonical.get_stats().run_containers, 1)
+  assert_eq(as_array.get_stats().array_containers, 1)
+  assert_eq(canonical.to_array(), as_array.to_array())
+  assert_true(canonical.equals(as_array))
+  assert_true(as_array.equals(canonical))
+  assert_true(canonical.equals(canonical))
+}
+
+///|
+test "equals rejects different content at the same cardinality" {
+  let a = @moonbit-roaring.RoaringBitmap::from_range(0U, 4096U)
+  let b = @moonbit-roaring.RoaringBitmap::from_range(1U, 4097U)
+  assert_eq(a.size(), b.size())
+  assert_false(a.equals(b))
+  assert_false(b.equals(a))
+  assert_false(a.equals(@moonbit-roaring.RoaringBitmap::new()))
+  assert_true(
+    @moonbit-roaring.RoaringBitmap::new().equals(
+      @moonbit-roaring.RoaringBitmap::new(),
+    ),
+  )
+}
+
+///|
+test "equals agrees with array comparison on randomized pairs" {
+  let mut seed = 4242
+  for _trial = 0; _trial < 30; _trial = _trial + 1 {
+    seed = batch_lcg(seed)
+    let count_a = 1 + seed % 200
+    let values_a = []
+    for _i = 0; _i < count_a; _i = _i + 1 {
+      seed = batch_lcg(seed)
+      values_a.push((seed % 200000).reinterpret_as_uint())
+    }
+    seed = batch_lcg(seed)
+    let count_b = 1 + seed % 200
+    let values_b = []
+    for _i = 0; _i < count_b; _i = _i + 1 {
+      seed = batch_lcg(seed)
+      values_b.push((seed % 200000).reinterpret_as_uint())
+    }
+    let a = @moonbit-roaring.RoaringBitmap::from_array(values_a)
+    let b = @moonbit-roaring.RoaringBitmap::from_array(values_b)
+    assert_eq(a.equals(b), a.to_array() == b.to_array())
+  }
+}
+
+// ============ min/max and contains on compressed containers ============
+
+///|
+/// Enough strided values to force a Bitmap container: consecutive data would
+/// collapse to a cheaper Run instead.
+fn bitmap_container_values(count : Int, offset : Int) -> Array[UInt] {
+  Array::makei(count, i => (offset + i * 2).reinterpret_as_uint())
+}
+
+///|
+test "min and max read the first and last set bit of a Bitmap container" {
+  let bm = @moonbit-roaring.RoaringBitmap::from_array(
+    bitmap_container_values(4097, 100),
+  )
+  assert_eq(bm.get_stats().bitmap_containers, 1)
+  assert_eq(bm.min(), Some(100U))
+  assert_eq(bm.max(), Some((100 + 4096 * 2).reinterpret_as_uint()))
+  // Both edges of the bucket at once.
+  let edges = @moonbit-roaring.RoaringBitmap::from_array([0U, 65535U])
+  assert_eq(edges.min(), Some(0U))
+  assert_eq(edges.max(), Some(65535U))
+  // Highest bit of a bucket that is not the last one.
+  let top = @moonbit-roaring.RoaringBitmap::new()
+    .add_range(0U, 65536U)
+    .remove_range(0U, 65535U)
+  assert_eq(top.min(), Some(65535U))
+  assert_eq(top.max(), Some(65535U))
+}
+
+///|
+test "contains finds a value inside a Run container without scanning it" {
+  // Runs of length three beat both the array and the bitmap encoding, and 1024
+  // of them give the membership test something to search. Runs of length two
+  // would tie with the array encoding instead, so they are not usable here.
+  let values = []
+  for k = 0; k < 1024; k = k + 1 {
+    let base = k * 10
+    values.push(base.reinterpret_as_uint())
+    values.push((base + 1).reinterpret_as_uint())
+    values.push((base + 2).reinterpret_as_uint())
+  }
+  let bm = @moonbit-roaring.RoaringBitmap::from_array(values)
+  assert_eq(bm.get_stats().run_containers, 1)
+  assert_eq(bm.size(), 3072)
+  assert_true(bm.contains(0U))
+  assert_true(bm.contains(1U))
+  assert_true(bm.contains(2U))
+  assert_true(bm.contains(10230U))
+  assert_true(bm.contains(10232U))
+  assert_false(bm.contains(3U))
+  assert_false(bm.contains(5U))
+  assert_false(bm.contains(10233U))
+  // Every value the bitmap claims to hold must be found, and nothing else.
+  for v in bm.to_array() {
+    assert_true(bm.contains(v))
+  }
+}

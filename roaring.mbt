@@ -475,14 +475,28 @@ pub fn RoaringBitmap::intersect_all(
 /// Structural equality by content, not by internal container layout: two
 /// bitmaps with the same elements are equal even if one stores a range as
 /// a Run and the other happens to store it as an Array.
+///
+/// Compares container by container rather than decoding both bitmaps to
+/// arrays: matching keys are compared in place when the representations agree
+/// (which is the common case, since anything built through the public API has
+/// a canonical representation) and only decoded when they differ. Equal
+/// cardinality implies equal container count, so the count check is a sound
+/// early-out.
 pub fn RoaringBitmap::equals(
   self : RoaringBitmap,
   other : RoaringBitmap,
 ) -> Bool {
-  if self.size != other.size {
+  if self.containers.length() != other.containers.length() {
     return false
   }
-  self.to_array() == other.to_array()
+  for i = 0; i < self.containers.length(); i = i + 1 {
+    let a = self.containers[i]
+    let b = other.containers[i]
+    if a.key != b.key || !container_equals_content(a.container, b.container) {
+      return false
+    }
+  }
+  true
 }
 
 ///|
