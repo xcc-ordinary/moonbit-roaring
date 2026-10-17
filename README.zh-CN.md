@@ -124,8 +124,10 @@ moon run cmd/main -- info 3a30000001000000000002001000000001006400e803
 - CI 在 `wasm`、`wasm-gc`、`js` 三个目标运行检查和测试。
 - 直接读取 `RoaringFormatSpec/testdata` 中由官方 Java 实现生成的文件，验证已知值，
   再逐字节重新编码。
-- 另有 6 类 fixture 由 `roaring-wasm` v1.1.0 生成。它是第三方、基于 CRoaring
-  的 WASM 包，并非官方项目；CI 验证结果可重复。
+- 另有 10 类 fixture 由 `roaring-wasm` v1.1.0 生成。它是第三方、基于 CRoaring
+  的 WASM 包，并非官方项目；CI 验证结果可重复。其中 4 类正好落在容器选择的
+  成本边界上（2、3、4 个连续值，以及散点中夹一个二元组），因此成本模型是
+  对照参考实现校验，而不是只对照自己。
 - 错误输入测试覆盖结构和语义校验，包括代表性数据的每一个截断前缀。
 - release 模式基准和复现方法见 [`docs/benchmarks.md`](docs/benchmarks.md)；这些数据
   只作为本项目基线，不用于宣称优于其他实现。

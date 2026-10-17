@@ -9,7 +9,13 @@ pub let array_container_max_size : Int = 4096
 pub let bitmap_container_size_bytes : Int = 8192 // 2^16 bits / 8 = 8KB
 
 ///|
-pub let run_container_min_run_length : Int = 2 // minimum consecutive elements to form a run
+/// Descriptive, not enforced: the shortest run-length-encoded sequence worth
+/// storing as a Run. No code path reads this constant — `optimize_container`
+/// reaches the same conclusion by cost, because a run of one value costs 4
+/// bytes against an array element's 2. It is kept as published 0.1.0 API so
+/// that callers referring to it do not break; read `optimize_container` for
+/// the rule that actually governs container selection.
+pub let run_container_min_run_length : Int = 2
 
 ///|
 /// Container types - the core of Roaring's compression strategy
