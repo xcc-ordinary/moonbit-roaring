@@ -480,9 +480,13 @@ fn optimize_container(arr : Array[UInt16]) -> Container {
     return Array([])
   }
   let runs = array_to_runs(arr)
+  // These three figures must match `container_byte_size`, which is what
+  // serialization actually writes. The Run cost used to omit the two-byte
+  // run-count header, so at an exact tie the encoder picked Run and then
+  // emitted two bytes more than the Array or Bitmap it was compared against.
   let array_cost = arr.length() * 2
   let bitmap_cost = bitmap_container_size_bytes
-  let run_cost = runs.length() * 4
+  let run_cost = 2 + 4 * runs.length()
   if run_cost <= array_cost && run_cost <= bitmap_cost {
     Run(runs)
   } else if array_cost <= bitmap_cost {

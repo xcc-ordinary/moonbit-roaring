@@ -37,16 +37,36 @@ test "4097 scattered values breaks the tie toward Bitmap" {
   assert_eq(stats.bitmap_containers, 1)
 }
 
-// ============ Run vs Array tie-break (both cost 4 bytes for 2 consecutive values) ============
+// ============ Run vs Array cost comparison ============
+//
+// The cost model has to agree with what serialization actually writes, which
+// for a Run container is a two-byte run count followed by four bytes per run.
+// CRoaring makes the same comparison — verified against `roaring-wasm`, whose
+// `runOptimize` picks Array for two consecutive values and Run for three.
 
 ///|
-test "two consecutive values tie Run vs Array, Run wins" {
-  // One run [5,6]: run_cost = 1*4 = 4. As an array: 2*2 = 4. Tie resolves
-  // to Run (run_cost <= array_cost is checked before array_cost <= bitmap_cost).
+test "two consecutive values are cheaper as an Array than a Run" {
+  // One run [5,6] costs 2 + 4 = 6 bytes on the wire; as an array, two
+  // elements cost 4. Array wins, matching CRoaring.
   let bm = @moonbit-roaring.RoaringBitmap::from_array([5U, 6U])
+  let stats = bm.get_stats()
+  assert_eq(stats.run_containers, 0)
+  assert_eq(stats.array_containers, 1)
+  // cookie + count + descriptive header + offset header + 2 array values
+  assert_eq(bm.serialize().length(), 4 + 4 + 4 + 4 + 4)
+}
+
+///|
+test "three consecutive values tie and the tie goes to Run" {
+  // One run [5,7] costs 2 + 4 = 6 bytes; three array elements also cost 6.
+  // The tie resolves to Run, again matching CRoaring.
+  let bm = @moonbit-roaring.RoaringBitmap::from_array([5U, 6U, 7U])
   let stats = bm.get_stats()
   assert_eq(stats.run_containers, 1)
   assert_eq(stats.array_containers, 0)
+  // cookie + run flags + descriptive header + (no offsets: one container is
+  // below the threshold) + run count + one run
+  assert_eq(bm.serialize().length(), 4 + 1 + 4 + 2 + 4)
 }
 
 ///|

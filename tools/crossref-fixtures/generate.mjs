@@ -51,6 +51,30 @@ cases.push({ name: "run_container", values: makeRange(0, 200), runOptimize: true
   cases.push({ name: "six_buckets_offset_header", values });
 }
 
+// 7-10. Container-selection tie-breaks.
+//
+// The cost model has to agree with what the portable format actually writes,
+// which for a Run container is a two-byte run count followed by four bytes per
+// run. These four shapes sit exactly on that boundary, so they pin the
+// comparison against the reference implementation rather than against
+// MoonBit's own idea of what is cheapest:
+//
+//   2 consecutive values: run costs 6, array costs 4 -> Array
+//   3 consecutive values: run costs 6, array costs 6 -> tie, Run
+//   4 consecutive values: run costs 6, array costs 8 -> Run
+//   one pair among scattered values: the pair must not drag the container to Run
+//
+// All four are run through `runOptimize`, because CRoaring (like this library's
+// cost model) only considers Run when explicitly asked.
+cases.push({ name: "tie_two_consecutive", values: [10, 11], runOptimize: true });
+cases.push({ name: "tie_three_consecutive", values: [10, 11, 12], runOptimize: true });
+cases.push({ name: "tie_four_consecutive", values: [10, 11, 12, 13], runOptimize: true });
+cases.push({
+  name: "tie_scattered_with_pair",
+  values: [1, 5, 9, 20, 21, 40, 77, 300, 900],
+  runOptimize: true,
+});
+
 const fixtures = {};
 for (const c of cases) {
   const bitmap = new RoaringBitmap32(c.values);
