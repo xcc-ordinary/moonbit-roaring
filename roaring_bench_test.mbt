@@ -29,6 +29,20 @@ fn mixed_fixture(offset : UInt) -> @moonbit-roaring.RoaringBitmap {
 }
 
 ///|
+/// Ascending values, so they all land in one bucket: this is the shape that
+/// used to pay a full array copy per inserted value.
+fn ascending_fixture(count : Int) -> Array[UInt] {
+  Array::makei(count, i => i.reinterpret_as_uint())
+}
+
+///|
+/// One value per bucket, so the fixture forces `count` distinct containers:
+/// this is the shape that used to rebuild the container list per new bucket.
+fn distinct_key_fixture(count : Int) -> Array[UInt] {
+  Array::makei(count, i => (i * 65536).reinterpret_as_uint())
+}
+
+///|
 test "bench construct sparse 4096 values" (it : @bench.T) {
   let values = sparse_fixture()
   it.bench(fn() {
@@ -103,5 +117,31 @@ test "bench deserialize mixed containers" (it : @bench.T) {
   it.bench(fn() {
     let result = @moonbit-roaring.RoaringBitmap::deserialize(bytes)
     it.keep(result)
+  })
+}
+
+///|
+// The two fixtures below exist to keep `add_many` honest. It used to be
+// quadratic — one linear scan over the seen keys per value, plus one
+// full-array copy per inserted value — which made 20,000 values take seconds.
+// Growth is now close to linear, so doubling the input roughly doubles the
+// time; if either of these starts quadrupling, the sort or the grouping has
+// regressed.
+
+///|
+test "bench add_many 20000 ascending (one bucket)" (it : @bench.T) {
+  let values = ascending_fixture(20000)
+  it.bench(fn() {
+    let bitmap = @moonbit-roaring.RoaringBitmap::from_array(values)
+    it.keep(bitmap)
+  })
+}
+
+///|
+test "bench add_many 8000 distinct keys (many buckets)" (it : @bench.T) {
+  let values = distinct_key_fixture(8000)
+  it.bench(fn() {
+    let bitmap = @moonbit-roaring.RoaringBitmap::from_array(values)
+    it.keep(bitmap)
   })
 }

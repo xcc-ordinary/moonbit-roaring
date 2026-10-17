@@ -396,3 +396,99 @@ test "intersect_all is empty when any bitmap is disjoint from the rest" {
   let result = @moonbit-roaring.RoaringBitmap::intersect_all([a, b, c])
   assert_true(result.is_empty())
 }
+
+// ============ add_many: batch construction ============
+//
+// add_many sorts its input and merges each bucket once. The tests below pin
+// that behaviour against the naive fold of single `add` calls, which is the
+// reference the batch path has to match exactly — including the serialized
+// bytes, so a difference in container selection would show up here too.
+
+///|
+/// A small deterministic generator, so these tests do not depend on
+/// `Math.random` (unavailable here) and stay reproducible.
+fn batch_lcg(seed : Int) -> Int {
+  let raw = seed * 1103515245 + 12345
+  if raw < 0 {
+    -raw % 1000000
+  } else {
+    raw % 1000000
+  }
+}
+
+///|
+test "add_many matches folding add over randomized inputs" {
+  let mut seed = 7
+  for _trial = 0; _trial < 25; _trial = _trial + 1 {
+    let count = 1 + batch_lcg(seed) % 300
+    seed = batch_lcg(seed)
+    let values = []
+    for _i = 0; _i < count; _i = _i + 1 {
+      seed = batch_lcg(seed)
+      values.push((seed % 300000).reinterpret_as_uint())
+    }
+    let via_many = @moonbit-roaring.RoaringBitmap::from_array(values)
+    let mut via_add = @moonbit-roaring.RoaringBitmap::new()
+    for v in values {
+      via_add = via_add.add(v)
+    }
+    assert_eq(via_many.to_array(), via_add.to_array())
+    assert_eq(via_many.size(), via_add.size())
+    assert_eq(via_many.serialize(), via_add.serialize())
+  }
+}
+
+///|
+test "add_many matches folding add on top of an existing bitmap" {
+  let mut seed = 99
+  for _trial = 0; _trial < 25; _trial = _trial + 1 {
+    let base_count = 1 + batch_lcg(seed) % 150
+    seed = batch_lcg(seed)
+    let base = []
+    for _i = 0; _i < base_count; _i = _i + 1 {
+      seed = batch_lcg(seed)
+      base.push((seed % 300000).reinterpret_as_uint())
+    }
+    let extra_count = 1 + batch_lcg(seed) % 300
+    seed = batch_lcg(seed)
+    let extra = []
+    for _i = 0; _i < extra_count; _i = _i + 1 {
+      seed = batch_lcg(seed)
+      extra.push((seed % 300000).reinterpret_as_uint())
+    }
+    let start = @moonbit-roaring.RoaringBitmap::from_array(base)
+    let via_many = start.add_many(extra)
+    let mut via_add = start
+    for v in extra {
+      via_add = via_add.add(v)
+    }
+    assert_eq(via_many.to_array(), via_add.to_array())
+    assert_eq(via_many.serialize(), via_add.serialize())
+    assert_eq(
+      via_many.get_stats().total_containers,
+      via_add.get_stats().total_containers,
+    )
+  }
+}
+
+///|
+test "add_many is idempotent and collapses duplicates" {
+  let values = [1U, 2U, 2U, 3U, 1U, 70000U, 70000U]
+  let bm = @moonbit-roaring.RoaringBitmap::from_array(values)
+  assert_eq(bm.to_array(), [1U, 2U, 3U, 70000U])
+  assert_eq(bm.add_many(values).to_array(), bm.to_array())
+  assert_eq(bm.add_many([]).to_array(), bm.to_array())
+  assert_eq(bm.add_many([1U, 1U, 1U]).to_array(), bm.to_array())
+}
+
+///|
+test "add_many spreads one value per bucket across many containers" {
+  // 20000 distinct high keys, one value each: the shape that used to rebuild
+  // the container list once per new bucket.
+  let values = Array::makei(20000, i => (i * 65536).reinterpret_as_uint())
+  let bm = @moonbit-roaring.RoaringBitmap::from_array(values)
+  assert_eq(bm.size(), 20000)
+  assert_eq(bm.get_stats().total_containers, 20000)
+  assert_eq(bm.min(), Some(0U))
+  assert_eq(bm.max(), Some((19999 * 65536).reinterpret_as_uint()))
+}

@@ -98,87 +98,72 @@ pub fn RoaringBitmap::add(self : RoaringBitmap, value : UInt) -> RoaringBitmap {
 }
 
 ///|
-/// Add multiple elements. Groups by high key first so each bucket is
-/// re-optimized once instead of once per inserted value.
+/// Add multiple elements.
+///
+/// Sorts a copy of the input, groups it by high key, and merges each group
+/// into the matching container in a single pass, for O(N log N + C) overall.
+/// The previous version scanned the list of seen keys once per value and then
+/// inserted each value with its own full-array copy, which made 20,000 values
+/// take seconds where `add_range` takes microseconds for the same data.
 pub fn RoaringBitmap::add_many(
   self : RoaringBitmap,
   values : Array[UInt],
 ) -> RoaringBitmap {
-  let mut result = self
-  // Group incoming values by high key, preserving first-seen order of keys.
-  let keys : Array[UInt16] = []
-  let grouped : Array[Array[UInt16]] = []
-  for v in values {
+  if values.length() == 0 {
+    return self
+  }
+  let sorted = values.copy()
+  sorted.sort()
+  // Group consecutive equal high keys. Because `sorted` is ascending, each
+  // group's low values come out ascending too, and duplicates are adjacent —
+  // so the groups are already in the shape `optimize_container` and the
+  // container merge below both require.
+  let group_keys : Array[UInt16] = []
+  let group_lows : Array[Array[UInt16]] = []
+  for v in sorted {
     let high = extract_high(v)
     let low = extract_low(v)
-    let mut found_idx = -1
-    for i = 0; i < keys.length(); i = i + 1 {
-      if keys[i] == high {
-        found_idx = i
+    if group_keys.length() > 0 && group_keys[group_keys.length() - 1] == high {
+      let group = group_lows[group_lows.length() - 1]
+      if group[group.length() - 1] != low {
+        group.push(low)
       }
-    }
-    if found_idx == -1 {
-      keys.push(high)
-      grouped.push([low])
     } else {
-      grouped[found_idx].push(low)
+      group_keys.push(high)
+      group_lows.push([low])
     }
   }
-  for i = 0; i < keys.length(); i = i + 1 {
-    let high = keys[i]
-    let lows = grouped[i]
-    result = result.add_bucket_values(high, lows)
-  }
-  result
-}
-
-///|
-/// Internal: merge a batch of low-16-bit values into a single bucket.
-fn RoaringBitmap::add_bucket_values(
-  self : RoaringBitmap,
-  high : UInt16,
-  lows : Array[UInt16],
-) -> RoaringBitmap {
-  match find_bucket(self.containers, high) {
-    Found(idx) => {
-      let bucket = self.containers[idx]
-      let existing = container_to_sorted_array(bucket.container)
-      let mut merged = existing
-      for v in lows {
-        merged = sorted_insert(merged, v)
-      }
-      let new_container = optimize_container(merged)
-      let new_bucket = HighContainer::{
-        key: high,
-        container: new_container,
-        cardinality: container_cardinality(new_container),
-      }
-      let new_containers = self.containers.copy()
-      new_containers[idx] = new_bucket
-      { containers: new_containers, size: rebuild_size(new_containers), }
+  // Merge-walk the existing containers against the groups, so the result array
+  // is assembled once rather than rebuilt for every new bucket.
+  let result_containers = []
+  let mut ci = 0
+  for gi = 0; gi < group_keys.length(); gi = gi + 1 {
+    let key = group_keys[gi]
+    while ci < self.containers.length() && self.containers[ci].key < key {
+      result_containers.push(self.containers[ci])
+      ci = ci + 1
     }
-    NotFound(pos) => {
-      let mut dedup : Array[UInt16] = []
-      for v in lows {
-        dedup = sorted_insert(dedup, v)
-      }
-      let new_container = optimize_container(dedup)
-      let new_bucket = HighContainer::{
-        key: high,
-        container: new_container,
-        cardinality: container_cardinality(new_container),
-      }
-      let new_containers = []
-      for i = 0; i < pos; i = i + 1 {
-        new_containers.push(self.containers[i])
-      }
-      new_containers.push(new_bucket)
-      for i = pos; i < self.containers.length(); i = i + 1 {
-        new_containers.push(self.containers[i])
-      }
-      { containers: new_containers, size: rebuild_size(new_containers), }
+    let has_bucket = ci < self.containers.length() &&
+      self.containers[ci].key == key
+    let merged = if has_bucket {
+      let existing = container_to_sorted_array(self.containers[ci].container)
+      ci = ci + 1
+      sorted_union(existing, group_lows[gi])
+    } else {
+      group_lows[gi]
     }
+    let new_container = optimize_container(merged)
+    result_containers.push(HighContainer::{
+      key,
+      container: new_container,
+      cardinality: container_cardinality(new_container),
+    })
   }
+  while ci < self.containers.length() {
+    result_containers.push(self.containers[ci])
+    ci = ci + 1
+  }
+  { containers: result_containers, size: rebuild_size(result_containers), }
 }
 
 ///|
