@@ -203,3 +203,32 @@ test "is_subset uses direct containment" {
   assert_true(dense.is_subset(wider))
   assert_false(wider.is_subset(dense))
 }
+
+///|
+test "is_subset compares Bitmap containers a word at a time" {
+  // Strided data defeats run-length encoding, so both sides are Bitmap
+  // containers and the word-level fast path is what runs. Correctness here is
+  // the same as for any other representation: a is a subset of b exactly when
+  // every strided value of a is also strided in b.
+  let a = @moonbit-roaring.RoaringBitmap::from_array(strided_values(20000, 0))
+  let b = @moonbit-roaring.RoaringBitmap::from_array(strided_values(30000, 0))
+  assert_eq(a.get_stats().bitmap_containers, 1)
+  assert_eq(b.get_stats().bitmap_containers, 1)
+  assert_true(a.is_subset(b))
+  assert_false(b.is_subset(a))
+  // Disjoint strides: a holds even values, c holds odd ones.
+  let c = @moonbit-roaring.RoaringBitmap::from_array(strided_values(20000, 1))
+  assert_false(a.is_subset(c))
+  assert_false(c.is_subset(a))
+  assert_true(a.is_subset(a))
+}
+
+///|
+test "is_subset agrees with the cardinality test on Bitmap containers" {
+  let a = @moonbit-roaring.RoaringBitmap::from_array(strided_values(12000, 0))
+  let b = @moonbit-roaring.RoaringBitmap::from_array(strided_values(18000, 0))
+  // andnot_cardinality == 0 is the definition; the containment walk has to
+  // reach the same verdict without counting.
+  assert_eq(a.is_subset(b), a.andnot_cardinality(b) == 0L)
+  assert_eq(b.is_subset(a), b.andnot_cardinality(a) == 0L)
+}
