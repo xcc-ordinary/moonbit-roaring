@@ -21,7 +21,7 @@ pub fn HighContainer::not_equal(Self, Self) -> Bool
 
 pub struct RoaringBitmap {
   containers : Array[HighContainer]
-  size : Int
+  size : Int64
 } derive(Eq)
 pub fn RoaringBitmap::add(Self, UInt) -> Self
 pub fn RoaringBitmap::add_many(Self, Array[UInt]) -> Self
@@ -57,7 +57,7 @@ pub fn RoaringBitmap::remove_range(Self, UInt, UInt) -> Self
 pub fn RoaringBitmap::select(Self, Int) -> UInt?
 pub fn RoaringBitmap::serialize(Self) -> Bytes
 pub fn RoaringBitmap::singleton(UInt) -> Self
-pub fn RoaringBitmap::size(Self) -> Int
+pub fn RoaringBitmap::size(Self) -> Int64
 pub fn RoaringBitmap::to_array(Self) -> Array[UInt]
 pub fn RoaringBitmap::union(Self, Self) -> Self
 pub fn RoaringBitmap::union_all(Array[Self]) -> Self

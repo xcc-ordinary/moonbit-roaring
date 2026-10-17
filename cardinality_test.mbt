@@ -24,10 +24,10 @@ fn assert_cardinality_agrees(
   a : @moonbit-roaring.RoaringBitmap,
   b : @moonbit-roaring.RoaringBitmap,
 ) -> Unit raise {
-  assert_eq(a.and_cardinality(b), Int64::from_int(a.intersect(b).size()))
-  assert_eq(a.or_cardinality(b), Int64::from_int(a.union(b).size()))
-  assert_eq(a.andnot_cardinality(b), Int64::from_int(a.difference(b).size()))
-  assert_eq(a.xor_cardinality(b), Int64::from_int(a.xor(b).size()))
+  assert_eq(a.and_cardinality(b), a.intersect(b).size())
+  assert_eq(a.or_cardinality(b), a.union(b).size())
+  assert_eq(a.andnot_cardinality(b), a.difference(b).size())
+  assert_eq(a.xor_cardinality(b), a.xor(b).size())
 }
 
 ///|
@@ -141,8 +141,8 @@ test "cardinality matches rank at the maximum element" {
   // rank(max) is defined to equal size; the same identity must hold through
   // the union cardinality of a bitmap with itself.
   let a = @moonbit-roaring.RoaringBitmap::from_array([5U, 6U, 70000U])
-  assert_eq(a.or_cardinality(a), Int64::from_int(a.size()))
-  assert_eq(a.and_cardinality(a), Int64::from_int(a.size()))
+  assert_eq(a.or_cardinality(a), a.size())
+  assert_eq(a.and_cardinality(a), a.size())
   assert_eq(a.xor_cardinality(a), 0L)
   assert_eq(a.andnot_cardinality(a), 0L)
 }

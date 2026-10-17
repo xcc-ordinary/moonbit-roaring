@@ -214,12 +214,12 @@ fn run_check(hex : String) -> Unit {
   match bitmap.max() {
     None => ()
     Some(m) =>
-      if bitmap.rank(m) != Int64::from_int(bitmap.size()) {
+      if bitmap.rank(m) != bitmap.size() {
         report("rank(max) does not equal size")
         return
       }
   }
-  if bitmap.size() > 0 {
+  if bitmap.size() > 0L {
     match bitmap.select(0) {
       None => {
         report("select(0) returned None for a non-empty bitmap")

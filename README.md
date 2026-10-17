@@ -178,10 +178,14 @@ the comparison document.
 - 32-bit unsigned values only; no Roaring64.
 - Portable format only; no native/frozen/mmap formats.
 - Immutable operations; no thread-safe mutable bitmap API.
-- `size()` returns a 32-bit signed `Int`, so a bitmap holding more than
-  2147483647 elements cannot report its own cardinality through it. The four
-  `*_cardinality` methods return `Int64` instead and stay exact across the
-  whole 2^32 range.
+- **Countable vs materializable.** `size`, `rank` and the four
+  `*_cardinality` methods return `Int64` and stay exact across the whole 32-bit
+  value space, so a bitmap holding 2^32 values reports its cardinality
+  correctly. The materializing methods — `to_array`, `from_array`, `iter` and
+  `add_many` — are capped at 2147483647 elements by MoonBit's own `Array`
+  length limit and cannot represent a bitmap that large. Everything else
+  (`contains`, `min`, `max`, `serialize`, `deserialize`, `get_stats`, `flip`,
+  `is_subset`) works on a bitmap of any size.
 - No SIMD-specific kernels and no claim of outperforming other implementations.
 - The native target is not currently part of the verified matrix.
 

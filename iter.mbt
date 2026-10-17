@@ -118,7 +118,10 @@ pub fn RoaringBitmap::iter(self : RoaringBitmap) -> Iter[UInt] {
       pos = pos + 1
       Some(value)
     },
-    size_hint=self.size,
+    // `size_hint` is an `Int` and a bitmap can hold more values than that, so
+    // clamp rather than wrap. The hint is advisory: `iter` is lazy and works
+    // on a bitmap of any size until the caller tries to collect it.
+    size_hint=size_as_int(self.size),
   )
 }
 

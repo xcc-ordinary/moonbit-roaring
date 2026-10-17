@@ -63,7 +63,7 @@ pub extend HighContainer with Eq::{equal, not_equal}
 /// The main RoaringBitmap structure
 pub struct RoaringBitmap {
   containers : Array[HighContainer] // sorted by key
-  size : Int // total cardinality across all containers
+  size : Int64 // total cardinality across all containers
 } derive(Eq)
 
 ///|

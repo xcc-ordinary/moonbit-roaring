@@ -166,8 +166,12 @@ moon bench --release --target wasm
 - 只支持 32 位无符号整数，不支持 Roaring64。
 - 只支持 portable 格式，不提供 native/frozen/mmap 格式。
 - 提供不可变操作，不提供线程安全的可变位图 API。
-- `size()` 返回 32 位有符号 `Int`，因此元素数超过 2147483647 的位图无法通过它报告自身基数。
-  四个 `*_cardinality` 方法返回 `Int64`，在整个 2^32 范围内保持精确。
+- **可计数与可物化的边界。** `size`、`rank` 和四个 `*_cardinality` 返回 `Int64`，
+  在整个 32 位取值范围内保持精确，因此装有 2^32 个值的位图也能正确报告基数。
+  而需要物化结果的方法——`to_array`、`from_array`、`iter`、`add_many`——受 MoonBit
+  自身 `Array` 长度上限 2147483647 约束，无法表示那么大的位图。其余方法
+  （`contains`、`min`、`max`、`serialize`、`deserialize`、`get_stats`、`flip`、
+  `is_subset`）对任意大小的位图都能工作。
 - 尚无 SIMD 专用内核，也不宣称性能优于其他实现。
 - 当前验证矩阵不包含 native 目标。
 

@@ -55,9 +55,9 @@ test "is_empty is false past the Int cardinality range" {
   assert_true(bm.contains(0U))
   assert_true(bm.contains(2147483647U))
   assert_eq(bm.min(), Some(0U))
-  // size() itself wraps; that is the documented 32-bit Int limitation, and it
-  // is why is_empty no longer derives its answer from it.
-  assert_eq(bm.size(), -2147483648)
+  // size() now reports the true cardinality rather than wrapping; that is the
+  // point of returning Int64.
+  assert_eq(bm.size(), 2147483648L)
 }
 
 ///|
@@ -87,4 +87,17 @@ test "rank and select stay inverse past the Int cardinality range" {
     assert_true(bm.contains(v))
     assert_eq(bm.select(bm.rank(v).to_int() - 1), Some(v))
   }
+}
+
+///|
+test "size reports the full 32-bit universe exactly" {
+  // 2^32 elements: unreportable before `size` returned Int64, since it
+  // exceeds what a 32-bit signed Int can hold by a factor of two.
+  let all = @moonbit-roaring.RoaringBitmap::new()
+    .add_range(0U, 4294967295U)
+    .add(4294967295U)
+  assert_eq(all.size(), 4294967296L)
+  assert_eq(all.rank(4294967294U), 4294967295L)
+  assert_eq(all.or_cardinality(all), 4294967296L)
+  assert_eq(all.get_stats().total_containers, 65536)
 }

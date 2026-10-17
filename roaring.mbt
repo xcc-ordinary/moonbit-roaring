@@ -23,12 +23,26 @@ fn find_bucket(containers : Array[HighContainer], key : UInt16) -> SearchResult 
 }
 
 ///|
-fn rebuild_size(containers : Array[HighContainer]) -> Int {
-  let mut total = 0
+/// Total cardinality across all containers. Accumulates in `Int64` because a
+/// bitmap can hold up to 2^32 values, which does not fit in a 32-bit `Int`.
+fn rebuild_size(containers : Array[HighContainer]) -> Int64 {
+  let mut total = 0L
   for hc in containers {
-    total = total + hc.cardinality
+    total = total + Int64::from_int(hc.cardinality)
   }
   total
+}
+
+///|
+/// A cardinality clamped to what a 32-bit `Int` can hold. Used where an `Int`
+/// is required but the value may legitimately exceed it — `Iter::new`'s
+/// `size_hint`, for instance, which is advisory.
+fn size_as_int(size : Int64) -> Int {
+  if size > 2147483647L {
+    2147483647
+  } else {
+    size.to_int()
+  }
 }
 
 // ============ Construction ============
@@ -36,7 +50,7 @@ fn rebuild_size(containers : Array[HighContainer]) -> Int {
 ///|
 /// Create an empty RoaringBitmap
 pub fn RoaringBitmap::new() -> RoaringBitmap {
-  { containers: [], size: 0, }
+  { containers: [], size: 0L, }
 }
 
 ///|
@@ -74,7 +88,7 @@ pub fn RoaringBitmap::add(self : RoaringBitmap, value : UInt) -> RoaringBitmap {
         }
         let new_containers = self.containers.copy()
         new_containers[idx] = new_bucket
-        { containers: new_containers, size: self.size + 1, }
+        { containers: new_containers, size: self.size + 1L, }
       }
     }
     NotFound(pos) => {
@@ -92,7 +106,7 @@ pub fn RoaringBitmap::add(self : RoaringBitmap, value : UInt) -> RoaringBitmap {
       for i = pos; i < self.containers.length(); i = i + 1 {
         new_containers.push(self.containers[i])
       }
-      { containers: new_containers, size: self.size + 1, }
+      { containers: new_containers, size: self.size + 1L, }
     }
   }
 }
@@ -190,7 +204,7 @@ pub fn RoaringBitmap::remove(
               new_containers.push(self.containers[i])
             }
           }
-          { containers: new_containers, size: self.size - 1, }
+          { containers: new_containers, size: self.size - 1L, }
         } else {
           let new_bucket = HighContainer::{
             key: high,
@@ -199,7 +213,7 @@ pub fn RoaringBitmap::remove(
           }
           let new_containers = self.containers.copy()
           new_containers[idx] = new_bucket
-          { containers: new_containers, size: self.size - 1, }
+          { containers: new_containers, size: self.size - 1L, }
         }
       }
     }
@@ -218,8 +232,18 @@ pub fn RoaringBitmap::contains(self : RoaringBitmap, value : UInt) -> Bool {
 }
 
 ///|
-/// Get cardinality (number of elements)
-pub fn RoaringBitmap::size(self : RoaringBitmap) -> Int {
+/// Get cardinality (number of elements).
+///
+/// Returns `Int64` because a bitmap can hold up to 2^32 values, which does
+/// not fit in MoonBit's 32-bit signed `Int`; a wrapped accumulator would
+/// report a negative cardinality. CRoaring's counterpart returns `uint64_t`.
+/// This matches `rank` and the `*_cardinality` methods, which are bounded the
+/// same way.
+///
+/// Note that the materializing methods — `to_array`, `from_array`, `iter`,
+/// `add_many` — are still capped at 2^31 - 1 elements by MoonBit's own
+/// `Array` length limit, and cannot represent a bitmap that large.
+pub fn RoaringBitmap::size(self : RoaringBitmap) -> Int64 {
   self.size
 }
 
@@ -605,7 +629,7 @@ pub fn RoaringBitmap::get_stats(self : RoaringBitmap) -> RoaringStats {
     }
     total_bytes = total_bytes + container_byte_size(hc.container)
   }
-  let naive_bytes = if self.size == 0 { 1 } else { (self.size + 7) / 8 }
+  let naive_bytes = if self.size == 0L { 1L } else { (self.size + 7L) / 8L }
   {
     total_containers: self.containers.length(),
     array_containers: array_count,

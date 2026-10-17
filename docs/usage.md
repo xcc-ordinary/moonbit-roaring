@@ -74,6 +74,34 @@ assert_eq(low.or_cardinality(high), 4294967296L)
 assert_eq(low.jaccard_similarity(high), 0.0)   // disjoint, not "both empty"
 ```
 
+`size` and `rank` return `Int64` for the same reason.
+
+### Countable versus materializable
+
+The distinction matters, because it is not the whole API that is exact at that
+scale:
+
+| Works on any bitmap | Capped at 2147483647 elements |
+| --- | --- |
+| `size`, `rank`, `and/or/andnot/xor_cardinality` | `to_array`, `from_array` |
+| `contains`, `contains_range`, `min`, `max` | `iter`, `add_many` |
+| `serialize`, `deserialize`, `get_stats` | |
+| `flip`, `is_subset`, `jaccard_similarity` | |
+| `add_range`, `remove_range`, `add`, `remove` | |
+| all the materializing set operations (`union`, …) | |
+
+The cap on the right-hand column is MoonBit's own `Array` length limit, not
+something this library chooses: an `Array[UInt]` simply cannot hold 2^31
+elements. Calling `to_array()` on a bitmap that large will fail to allocate.
+The left-hand column never materializes the set, so it is bounded only by the
+32-bit value space itself.
+
+In practice this rarely bites, because building such a bitmap in the first
+place usually goes through the right-hand column. The realistic way to arrive
+at one is `deserialize` of bytes produced by another implementation — which is
+the interoperability case this package exists for, and the reason `size` was
+changed to `Int64` rather than left to wrap.
+
 `is_subset` is implemented as a direct containment walk rather than through
 `andnot_cardinality`, so it cannot be fooled by a wrapped count into
 reporting a non-subset as a subset.
