@@ -175,6 +175,27 @@ moon bench --release --target wasm
 - 尚无 SIMD 专用内核，也不宣称性能优于其他实现。
 - 当前验证矩阵不包含 native 目标。
 
+## 从 0.1.0 迁移
+
+唯一的破坏性变更：`RoaringBitmap::size()` 的返回类型从 `Int` 变为 `Int64`。
+位图最多可容纳 2^32 个值，32 位有符号 `Int` 无法表示，因此对于那么大的位图，
+`size()` 过去会返回负数基数——而读取其他实现产生的 portable 字节就能达到这个量级。
+
+需要把结果绑定到 `Int` 的代码要做相应拓宽：
+
+```moonbit
+// 迁移前
+let n : Int = bitmap.size()
+
+// 迁移后
+let n : Int64 = bitmap.size()
+let n32 : Int = bitmap.size().to_int() // 仅在确定放得下时使用
+```
+
+`rank` 和四个 `*_cardinality` 方法本来就因同一原因返回 `Int64`，因此这次改动让
+可计数的那一族保持一致。与 `Int` 字面量混算没有问题（`bitmap.size() > 0L`），
+字符串插值也无需改动。
+
 ## 许可证
 
 Apache-2.0。

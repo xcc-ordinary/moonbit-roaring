@@ -189,6 +189,29 @@ the comparison document.
 - No SIMD-specific kernels and no claim of outperforming other implementations.
 - The native target is not currently part of the verified matrix.
 
+## Migrating from 0.1.0
+
+One breaking change: `RoaringBitmap::size()` returns `Int64` instead of `Int`.
+A bitmap can hold up to 2^32 values, which a 32-bit signed `Int` cannot
+represent, so `size()` used to report a negative cardinality for a bitmap that
+large — reachable by reading portable bytes from another implementation.
+
+Code that binds the result to an `Int` needs to widen it:
+
+```moonbit
+// before
+let n : Int = bitmap.size()
+
+// after
+let n : Int64 = bitmap.size()
+let n32 : Int = bitmap.size().to_int() // only if you know it fits
+```
+
+`rank` and the four `*_cardinality` methods already returned `Int64` for the
+same reason, so this makes the countable family consistent. Arithmetic mixes
+freely with `Int` literals (`bitmap.size() > 0L`), and string interpolation
+works unchanged.
+
 ## License
 
 Apache-2.0.
