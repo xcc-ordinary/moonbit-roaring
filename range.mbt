@@ -325,6 +325,223 @@ fn range_minus_sorted(
 }
 
 ///|
+/// Emit every set bit of one word, tagged with its position in the container.
+/// Cost is O(popcount), not O(64): a zero word costs one comparison.
+fn emit_set_bits(word : UInt64, word_start : Int, out : Array[UInt16]) -> Unit {
+  let mut bits = word
+  while bits != 0UL {
+    let bit = lowest_set_bit(bits)
+    out.push((word_start + bit).to_uint16())
+    bits = bits & (bits - 1UL)
+  }
+}
+
+///|
+/// Set bits of one word that fall outside the container-relative range
+/// [lo, hi]. Both bounds are known to lie inside this word.
+fn emit_set_bits_outside(
+  word : UInt64,
+  word_start : Int,
+  lo : Int,
+  hi : Int,
+  out : Array[UInt16],
+) -> Unit {
+  let mut bits = word
+  while bits != 0UL {
+    let bit = lowest_set_bit(bits)
+    let value = word_start + bit
+    if value < lo || value > hi {
+      out.push(value.to_uint16())
+    }
+    bits = bits & (bits - 1UL)
+  }
+}
+
+///|
+/// A mask with bits `from` through `to` set, for `0 <= from <= to <= 63`.
+fn bit_range_mask(from : Int, to : Int) -> UInt64 {
+  let high = if to >= 63 {
+    0xFFFFFFFFFFFFFFFFUL
+  } else {
+    (1UL << (to + 1)) - 1UL
+  }
+  let low = if from <= 0 {
+    0xFFFFFFFFFFFFFFFFUL
+  } else {
+    ((1UL << from) - 1UL).lnot()
+  }
+  high & low
+}
+
+///|
+/// Values held by the bitmap OUTSIDE the local inclusive range [lo, hi].
+/// Only the words the range does not cover are scanned, plus the at most two
+/// that straddle its ends, so complementing a whole bucket costs O(1) in
+/// words rather than the O(65536) an array decode would pay.
+fn bitmap_values_outside_range(
+  words : FixedArray[UInt64],
+  lo : Int,
+  hi : Int,
+) -> Array[UInt16] {
+  let result = []
+  let first = lo / 64
+  let last = hi / 64
+  for w = 0; w < first; w = w + 1 {
+    emit_set_bits(words[w], w * 64, result)
+  }
+  for w = last + 1; w < words.length(); w = w + 1 {
+    emit_set_bits(words[w], w * 64, result)
+  }
+  if first == last {
+    emit_set_bits_outside(words[first], first * 64, lo, hi, result)
+  } else {
+    emit_set_bits_outside(words[first], first * 64, lo, hi, result)
+    emit_set_bits_outside(words[last], last * 64, lo, hi, result)
+  }
+  result
+}
+
+///|
+/// Values ABSENT from the bitmap inside the local inclusive range [lo, hi].
+/// Inverts each covered word and walks its set bits, so a fully populated
+/// word costs one comparison and a narrow range only touches the words it
+/// actually covers — against the O(65536) decode the array path would pay.
+fn bitmap_gaps_in_range(
+  words : FixedArray[UInt64],
+  lo : Int,
+  hi : Int,
+) -> Array[UInt16] {
+  let result = []
+  let first_word = lo / 64
+  let last_word = hi / 64
+  for w = first_word; w <= last_word; w = w + 1 {
+    let mut missing = words[w].lnot()
+    if missing == 0UL {
+      continue
+    }
+    let from = if w == first_word { lo % 64 } else { 0 }
+    let to = if w == last_word { hi % 64 } else { 63 }
+    missing = missing & bit_range_mask(from, to)
+    let word_start = w * 64
+    while missing != 0UL {
+      let bit = lowest_set_bit(missing)
+      result.push((word_start + bit).to_uint16())
+      missing = missing & (missing - 1UL)
+    }
+  }
+  result
+}
+
+///|
+/// Values held by the runs OUTSIDE the local inclusive range [lo, hi]. Runs
+/// are sorted, so this stops as soon as it passes the range.
+fn run_values_outside_range(
+  runs : Array[Run],
+  lo : Int,
+  hi : Int,
+) -> Array[UInt16] {
+  let result = []
+  for r in runs {
+    let start = r.start.to_int()
+    if start > hi {
+      // Everything from here on is past the range.
+      let end = start + r.length.to_int()
+      for v = start; v <= end; v = v + 1 {
+        result.push(v.to_uint16())
+      }
+      break
+    }
+    let end = start + r.length.to_int()
+    if end < lo {
+      for v = start; v <= end; v = v + 1 {
+        result.push(v.to_uint16())
+      }
+    } else {
+      if start < lo {
+        for v = start; v < lo; v = v + 1 {
+          result.push(v.to_uint16())
+        }
+      }
+      if end > hi {
+        for v = hi + 1; v <= end; v = v + 1 {
+          result.push(v.to_uint16())
+        }
+      }
+    }
+  }
+  result
+}
+
+///|
+/// Values ABSENT from the runs inside the local inclusive range [lo, hi],
+/// produced by walking the gaps between them. Cost is O(runs + values
+/// emitted) instead of decoding the runs into an array first.
+fn run_gaps_in_range(runs : Array[Run], lo : Int, hi : Int) -> Array[UInt16] {
+  let result = []
+  let mut cursor = lo
+  for r in runs {
+    let start = r.start.to_int()
+    if start > hi {
+      break
+    }
+    let end = start + r.length.to_int()
+    if end < lo {
+      continue
+    }
+    if start > cursor {
+      let stop = if start - 1 < hi { start - 1 } else { hi }
+      for v = cursor; v <= stop; v = v + 1 {
+        result.push(v.to_uint16())
+      }
+    }
+    if end + 1 > cursor {
+      cursor = end + 1
+    }
+    if cursor > hi {
+      break
+    }
+  }
+  for v = cursor; v <= hi; v = v + 1 {
+    result.push(v.to_uint16())
+  }
+  result
+}
+
+///|
+/// The two halves of a complement within [lo, hi]: the values that survive
+/// because they sit outside the interval, and the values that arrive because
+/// they were absent inside it. Both come back ascending and duplicate-free,
+/// and they are disjoint by construction, which is what `sorted_union` needs.
+///
+/// Only the Array case decodes: Bitmap and Run containers are read in place,
+/// so complementing a dense bucket no longer costs a 65536-element array.
+fn container_flip_parts(
+  c : Container,
+  lo : Int,
+  hi : Int,
+) -> (Array[UInt16], Array[UInt16]) {
+  match c {
+    Array(arr) => {
+      let kept = []
+      for v in arr {
+        let vi = v.to_int()
+        if vi < lo || vi > hi {
+          kept.push(v)
+        }
+      }
+      (kept, range_minus_sorted(lo, hi, arr))
+    }
+    Bitmap(words) =>
+      (
+        bitmap_values_outside_range(words, lo, hi),
+        bitmap_gaps_in_range(words, lo, hi),
+      )
+    Run(runs) =>
+      (run_values_outside_range(runs, lo, hi), run_gaps_in_range(runs, lo, hi))
+  }
+}
+
+///|
 /// Complement of `c` restricted to the local inclusive range `[lo, hi]`.
 /// Returns `None` when the result is empty, so the caller can drop the
 /// bucket outright instead of storing an empty container.
@@ -335,17 +552,7 @@ fn range_minus_sorted(
 /// "everything the bucket did not already hold", which is only empty when
 /// the bucket held everything to begin with.
 fn container_flip_range(c : Container, lo : Int, hi : Int) -> Container? {
-  let existing = container_to_sorted_array(c)
-  // Values outside [lo, hi] survive untouched.
-  let kept = []
-  for v in existing {
-    let vi = v.to_int()
-    if vi < lo || vi > hi {
-      kept.push(v)
-    }
-  }
-  // Inside [lo, hi], absent becomes present and present becomes absent.
-  let added = range_minus_sorted(lo, hi, existing)
+  let (kept, added) = container_flip_parts(c, lo, hi)
   let merged = sorted_union(kept, added)
   if merged.length() == 0 {
     None

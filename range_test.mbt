@@ -475,3 +475,79 @@ test "the whole 32-bit space is one add_range call" {
   assert_eq(all.min(), Some(0U))
   assert_eq(all.max(), Some(4294967295U))
 }
+
+// ============ flip as a differential property ============
+//
+// `flip(start, end)` is defined as the complement within the closed interval,
+// which is exactly the symmetric difference with that interval. Stating it
+// that way gives a reference implementation to test against that shares no
+// code with the one under test, so the word-level gap scanning added later
+// can be verified without trusting it.
+
+///|
+/// `flip` over a closed interval equals xor with that interval. The two sides
+/// share no code: one walks buckets and computes gaps, the other builds the
+/// interval and runs the generic container xor.
+fn assert_flip_matches_xor(
+  bm : @moonbit-roaring.RoaringBitmap,
+  start : UInt,
+  end : UInt,
+) -> Unit raise {
+  // `from_range` is half-open, so the interval is [start, end + 1). That
+  // addition wraps when `end` is UInt's maximum, so the top of the range is
+  // built by adding the final value explicitly instead.
+  let interval = if end == 4294967295U {
+    @moonbit-roaring.RoaringBitmap::new()
+    .add_range(start, 4294967295U)
+    .add(4294967295U)
+  } else {
+    @moonbit-roaring.RoaringBitmap::from_range(start, end + 1U)
+  }
+  assert_eq(bm.flip(start, end).to_array(), bm.xor(interval).to_array())
+  assert_eq(bm.flip(start, end).serialize(), bm.xor(interval).serialize())
+}
+
+///|
+test "flip equals xor with the interval on randomized inputs" {
+  let mut seed = 5150
+  for _trial = 0; _trial < 50; _trial = _trial + 1 {
+    seed = range_lcg(seed)
+    let count = 1 + seed % 120
+    let values = []
+    for _i = 0; _i < count; _i = _i + 1 {
+      seed = range_lcg(seed)
+      values.push((seed % 400000).reinterpret_as_uint())
+    }
+    let bm = @moonbit-roaring.RoaringBitmap::from_array(values)
+    seed = range_lcg(seed)
+    let a = (seed % 400000).reinterpret_as_uint()
+    seed = range_lcg(seed)
+    let b = (seed % 400000).reinterpret_as_uint()
+    assert_flip_matches_xor(bm, a, b)
+  }
+}
+
+///|
+test "flip equals xor with the interval at bucket boundaries" {
+  // Intervals that straddle bucket edges, cover whole buckets, and reach the
+  // top of the 32-bit space, against each container representation.
+  let sparse = @moonbit-roaring.RoaringBitmap::from_array([1U, 65535U, 65536U])
+  let runs = @moonbit-roaring.RoaringBitmap::from_range(0U, 200000U)
+  let dense_values = Array::makei(9000, i => (i * 7).reinterpret_as_uint())
+  let dense = @moonbit-roaring.RoaringBitmap::from_array(dense_values)
+  let intervals = [
+    (0U, 0U),
+    (65534U, 65537U),
+    (65535U, 65536U),
+    (0U, 65535U),
+    (65536U, 131071U),
+    (0U, 131072U),
+    (4294967290U, 4294967295U),
+    (4294967295U, 4294967295U),
+  ]
+  for bm in [sparse, runs, dense] {
+    for (lo, hi) in intervals {
+      assert_flip_matches_xor(bm, lo, hi)
+    }
+  }
+}

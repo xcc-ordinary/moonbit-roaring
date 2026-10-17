@@ -306,17 +306,40 @@ fn container_cardinality(c : Container) -> Int {
 
 ///|
 /// Index of the lowest set bit in a non-zero word, or -1 if the word is zero.
+///
+/// Binary search rather than a shift loop. This runs once per emitted bit in
+/// the complement paths, where a linear scan would cost more than the 64-bit
+/// loop it was meant to replace.
 fn lowest_set_bit(word : UInt64) -> Int {
   if word == 0UL {
     -1
   } else {
+    let mut n = 0
     let mut w = word
-    let mut bit = 0
-    while (w & 1UL) == 0UL {
-      w = w >> 1
-      bit = bit + 1
+    if (w & 0xFFFFFFFFUL) == 0UL {
+      n = n + 32
+      w = w >> 32
     }
-    bit
+    if (w & 0xFFFFUL) == 0UL {
+      n = n + 16
+      w = w >> 16
+    }
+    if (w & 0xFFUL) == 0UL {
+      n = n + 8
+      w = w >> 8
+    }
+    if (w & 0xFUL) == 0UL {
+      n = n + 4
+      w = w >> 4
+    }
+    if (w & 0x3UL) == 0UL {
+      n = n + 2
+      w = w >> 2
+    }
+    if (w & 0x1UL) == 0UL {
+      n = n + 1
+    }
+    n
   }
 }
 
