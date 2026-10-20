@@ -233,3 +233,49 @@ test "deserialize rejects truncated container data" {
     Err(_) => ()
   }
 }
+
+///|
+test "portable_size_in_bytes always equals the serialized length" {
+  // The two must not drift: the header arithmetic lives in one place, and this
+  // is what keeps it there.
+  let shapes = [
+    @moonbit-roaring.RoaringBitmap::new(),
+    @moonbit-roaring.RoaringBitmap::from_array([1U]),
+    @moonbit-roaring.RoaringBitmap::from_array([1U, 2U]),
+    @moonbit-roaring.RoaringBitmap::from_array([1U, 2U, 3U]),
+    @moonbit-roaring.RoaringBitmap::from_array([1U, 100U, 1000U]),
+    @moonbit-roaring.RoaringBitmap::from_range(0U, 200U),
+    @moonbit-roaring.RoaringBitmap::from_range(0U, 200000U),
+    @moonbit-roaring.RoaringBitmap::from_array(
+      Array::makei(9000, i => (i * 2).reinterpret_as_uint()),
+    ),
+  ]
+  for bm in shapes {
+    assert_eq(bm.portable_size_in_bytes(), bm.serialize().length())
+  }
+  // Six containers, past the offset-header threshold in both layouts.
+  let six = @moonbit-roaring.RoaringBitmap::from_array([
+    1U, 100001U, 200001U, 300001U, 400001U, 500001U,
+  ])
+  assert_eq(six.portable_size_in_bytes(), six.serialize().length())
+  // And after a round trip, which can change the representation.
+  let restored = match
+    @moonbit-roaring.RoaringBitmap::deserialize(six.serialize()) {
+    Ok(b) => b
+    Err(_) => {
+      println("round trip rejected a valid bitmap")
+      panic()
+    }
+  }
+  assert_eq(restored.portable_size_in_bytes(), restored.serialize().length())
+}
+
+///|
+test "portable_size_in_bytes does not allocate the encoding" {
+  // It reports the size of a bitmap far larger than anything that could be
+  // materialized in one piece, which `serialize` would have to build first.
+  let huge = @moonbit-roaring.RoaringBitmap::new().add_range(0U, 2147483648U)
+  let predicted = huge.portable_size_in_bytes()
+  assert_true(predicted > 0)
+  assert_eq(predicted, huge.serialize().length())
+}

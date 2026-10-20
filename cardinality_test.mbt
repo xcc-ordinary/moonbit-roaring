@@ -232,3 +232,54 @@ test "is_subset agrees with the cardinality test on Bitmap containers" {
   assert_eq(a.is_subset(b), a.andnot_cardinality(b) == 0L)
   assert_eq(b.is_subset(a), b.andnot_cardinality(a) == 0L)
 }
+
+///|
+test "intersects agrees with and_cardinality on randomized pairs" {
+  // The merge walk in `intersects` has three branches, and a wrong index
+  // update in any of them still compiles. Pairing it against the counting
+  // version catches that — as a hang rather than a wrong verdict, since a
+  // backwards index update makes the walk fail to terminate.
+  let mut seed = 3131
+  for _trial = 0; _trial < 40; _trial = _trial + 1 {
+    seed = range_lcg(seed)
+    let count_a = 1 + seed % 100
+    let values_a = []
+    for _i = 0; _i < count_a; _i = _i + 1 {
+      seed = range_lcg(seed)
+      values_a.push((seed % 500000).reinterpret_as_uint())
+    }
+    seed = range_lcg(seed)
+    let count_b = 1 + seed % 100
+    let values_b = []
+    for _i = 0; _i < count_b; _i = _i + 1 {
+      seed = range_lcg(seed)
+      values_b.push((seed % 500000).reinterpret_as_uint())
+    }
+    let a = @moonbit-roaring.RoaringBitmap::from_array(values_a)
+    let b = @moonbit-roaring.RoaringBitmap::from_array(values_b)
+    assert_eq(a.intersects(b), b.intersects(a))
+    assert_eq(a.intersects(b), a.and_cardinality(b) > 0L)
+  }
+}
+
+///|
+test "intersects is true exactly when the sets overlap" {
+  let a = @moonbit-roaring.RoaringBitmap::from_array([1U, 2U, 70000U])
+  let b = @moonbit-roaring.RoaringBitmap::from_array([2U, 3U, 140000U])
+  let c = @moonbit-roaring.RoaringBitmap::from_array([4U, 140000U])
+  assert_true(a.intersects(b))
+  assert_true(b.intersects(a))
+  assert_false(a.intersects(c))
+  assert_false(c.intersects(a))
+  assert_true(a.intersects(a))
+  assert_false(@moonbit-roaring.RoaringBitmap::new().intersects(a))
+  assert_false(a.intersects(@moonbit-roaring.RoaringBitmap::new()))
+  // Same bucket, no shared value.
+  let dense_a = @moonbit-roaring.RoaringBitmap::from_array(
+    bitmap_container_values(9000, 0),
+  )
+  let dense_b = @moonbit-roaring.RoaringBitmap::from_array(
+    bitmap_container_values(9000, 1),
+  )
+  assert_false(dense_a.intersects(dense_b))
+}

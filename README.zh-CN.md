@@ -86,11 +86,14 @@ moon run examples/analytics
 - Array、Bitmap、Run 三种容器
 - 标准集合运算与多路并集/交集
 - 只算基数的集合运算（`and_cardinality`、`or_cardinality`、`andnot_cardinality`、
-  `xor_cardinality`），不构造结果位图
+  `xor_cardinality`、`range_cardinality`），不构造结果位图
+- `intersects`：短路判断两个位图是否有交集
 - 半开区间构造、修改和包含判断
 - 闭区间补集 `flip`
 - 惰性 `Iter[UInt]`、bitmap 级 `rank` 和 `select`
-- Roaring portable 序列化与严格反序列化
+- Roaring portable 序列化、严格反序列化，以及不构造编码即可得知线上大小的
+  `portable_size_in_bytes`
+- `from_sorted`：导入已有序数据；`run_optimize`：重新编码从其他实现读入的位图
 - 不修改原对象的兼容 API：`clear`、闭区间 `range`、Jaccard 相似度
 - 容器选择和编码 payload 大小统计
 

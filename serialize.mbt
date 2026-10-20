@@ -77,13 +77,40 @@ fn write_container_data(buf : @buffer.Buffer, c : Container) -> Unit {
 }
 
 ///|
+/// Byte length of the portable encoding of `containers`, headers included.
+///
+/// The single source of truth for the layout: `serialize` uses it to size its
+/// buffer and `portable_size_in_bytes` reports it, so the two cannot drift
+/// apart. The cost model already had one bug from being computed in two
+/// places — see `optimize_container`.
+fn portable_encoded_size(containers : Array[HighContainer]) -> Int32 {
+  let size = containers.length()
+  let mut total = 0
+  if !has_run_container(containers) {
+    // cookie + container count + descriptive header + offset header
+    total = 4 + 4 + 4 * size + 4 * size
+  } else {
+    // cookie + run flags + descriptive header, plus offsets once there are
+    // enough containers to warrant them
+    total = 4 + (size + 7) / 8 + 4 * size
+    if size >= no_offset_threshold {
+      total = total + 4 * size
+    }
+  }
+  for hc in containers {
+    total = total + container_byte_size(hc.container)
+  }
+  total
+}
+
+///|
 /// Serialize to the CRoaring-compatible portable binary format.
 /// This project intentionally exposes only the interoperable format; native
 /// and frozen formats are separate future APIs rather than a boolean mode.
 pub fn RoaringBitmap::serialize(self : RoaringBitmap) -> Bytes {
   let containers = self.containers
   let size = containers.length()
-  let buf = @buffer.Buffer::Buffer()
+  let buf = @buffer.Buffer::Buffer(size_hint=portable_encoded_size(containers))
   if !has_run_container(containers) {
     // SERIAL_COOKIE_NO_RUNCONTAINER layout: always used when there are no
     // run containers, matching CRoaring's isomorphism recommendation.
@@ -361,4 +388,19 @@ pub fn RoaringBitmap::deserialize(
   }
   let total = rebuild_size(containers)
   Ok({ containers, size: total, })
+}
+
+///|
+/// How many bytes `serialize` will produce, without building them.
+///
+/// Answers "what will this handoff cost on the wire" for a bitmap you already
+/// hold, which is what you need to pre-size a send buffer, enforce a per-record
+/// byte budget, or report a size without allocating the whole encoding first.
+/// `get_stats().total_bytes_used` is the container payload alone and says
+/// nothing about the headers.
+///
+/// Always equal to `serialize().length()`; a test pins that over a range of
+/// container mixes so the two cannot drift.
+pub fn RoaringBitmap::portable_size_in_bytes(self : RoaringBitmap) -> Int32 {
+  portable_encoded_size(self.containers)
 }

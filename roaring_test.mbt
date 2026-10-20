@@ -685,3 +685,78 @@ test "== agrees with equals on randomized pairs across representations" {
     assert_true(canonical == round_tripped)
   }
 }
+
+///|
+test "from_sorted matches from_array and skips the sort" {
+  let values = [1U, 2U, 2U, 3U, 70000U, 70000U, 200000U]
+  let sorted = values.copy()
+  sorted.sort()
+  let via_sorted = @moonbit-roaring.RoaringBitmap::from_sorted(sorted)
+  let via_array = @moonbit-roaring.RoaringBitmap::from_array(values)
+  assert_eq(via_sorted.to_array(), via_array.to_array())
+  assert_eq(via_sorted.serialize(), via_array.serialize())
+  // Duplicates are collapsed, and an empty input is empty.
+  assert_eq(via_sorted.add_sorted(sorted).to_array(), via_sorted.to_array())
+  assert_true(@moonbit-roaring.RoaringBitmap::from_sorted([]).is_empty())
+  // Ascending data spread over many buckets.
+  let spread = Array::makei(5000, i => (i * 65536).reinterpret_as_uint())
+  let bm = @moonbit-roaring.RoaringBitmap::from_sorted(spread)
+  assert_eq(bm.size(), 5000)
+  assert_eq(bm.get_stats().total_containers, 5000)
+}
+
+///|
+test "run_optimize re-encodes a foreign bitmap" {
+  // Portable bytes that store {0,1,2} as an Array container, i.e. what a
+  // producer that did not run-optimize would emit. `from_array` of the same
+  // values produces a Run, so this is the interop shape the method exists for.
+  let foreign = match
+    @moonbit-roaring.RoaringBitmap::deserialize(array_container_bytes(3)) {
+    Ok(b) => b
+    Err(e) => {
+      println("fixture rejected: \{e}")
+      panic()
+    }
+  }
+  assert_eq(foreign.get_stats().array_containers, 1)
+  let optimized = foreign.run_optimize()
+  assert_eq(optimized.get_stats().run_containers, 1)
+  assert_eq(optimized.get_stats().array_containers, 0)
+  // Same set, fewer bytes.
+  assert_eq(optimized.to_array(), foreign.to_array())
+  assert_true(
+    optimized.portable_size_in_bytes() < foreign.portable_size_in_bytes(),
+  )
+  assert_eq(optimized.size(), foreign.size())
+  // Idempotent, and a no-op on an already-canonical bitmap.
+  assert_eq(optimized.run_optimize().serialize(), optimized.serialize())
+  let canonical = @moonbit-roaring.RoaringBitmap::from_array([0U, 1U, 2U])
+  assert_eq(canonical.run_optimize().serialize(), canonical.serialize())
+}
+
+///|
+test "run_optimize agrees with from_array on randomized sets" {
+  let mut seed = 7272
+  for _trial = 0; _trial < 25; _trial = _trial + 1 {
+    seed = batch_lcg(seed)
+    let count = 1 + seed % 200
+    let values = []
+    for _i = 0; _i < count; _i = _i + 1 {
+      seed = batch_lcg(seed)
+      values.push((seed % 300000).reinterpret_as_uint())
+    }
+    let canonical = @moonbit-roaring.RoaringBitmap::from_array(values)
+    let foreign = match
+      @moonbit-roaring.RoaringBitmap::deserialize(canonical.serialize()) {
+      Ok(b) => b
+      Err(_) => {
+        println("round trip rejected a valid bitmap")
+        panic()
+      }
+    }
+    // After optimizing, the round-tripped bitmap must be byte-identical to the
+    // one built here — the canonical form is a fixed point of run_optimize.
+    assert_eq(foreign.run_optimize().serialize(), canonical.serialize())
+    assert_eq(foreign.run_optimize().size(), canonical.size())
+  }
+}

@@ -336,3 +336,66 @@ pub fn RoaringBitmap::xor_cardinality(
   }
   count
 }
+
+///|
+/// Whether two containers share at least one value, short-circuiting on the
+/// first one rather than counting the whole intersection.
+fn container_intersects(c1 : Container, c2 : Container) -> Bool {
+  match (c1, c2) {
+    (Bitmap(w1), Bitmap(w2)) => {
+      for i = 0; i < w1.length(); i = i + 1 {
+        if (w1[i] & w2[i]) != 0UL {
+          return true
+        }
+      }
+      false
+    }
+    _ => {
+      let a = container_to_sorted_array(c1)
+      let b = container_to_sorted_array(c2)
+      let mut i = 0
+      let mut j = 0
+      while i < a.length() && j < b.length() {
+        if a[i] == b[j] {
+          return true
+        } else if a[i] < b[j] {
+          i = i + 1
+        } else {
+          j = j + 1
+        }
+      }
+      false
+    }
+  }
+}
+
+///|
+/// Whether the two bitmaps share at least one element.
+///
+/// The query behind "does this document match any of these terms", and the
+/// most common filter in an inverted index. Stops at the first shared bucket,
+/// so it is cheaper than `and_cardinality(other) > 0`, which counts the whole
+/// intersection to answer a yes/no question.
+pub fn RoaringBitmap::intersects(
+  self : RoaringBitmap,
+  other : RoaringBitmap,
+) -> Bool {
+  let mut i = 0
+  let mut j = 0
+  while i < self.containers.length() && j < other.containers.length() {
+    let a = self.containers[i]
+    let b = other.containers[j]
+    if a.key < b.key {
+      i = i + 1
+    } else if a.key > b.key {
+      j = j + 1
+    } else {
+      if container_intersects(a.container, b.container) {
+        return true
+      }
+      i = i + 1
+      j = j + 1
+    }
+  }
+  false
+}

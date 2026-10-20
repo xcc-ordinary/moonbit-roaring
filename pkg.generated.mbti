@@ -24,6 +24,7 @@ pub struct RoaringBitmap {
 pub fn RoaringBitmap::add(Self, UInt32) -> Self
 pub fn RoaringBitmap::add_many(Self, Array[UInt32]) -> Self
 pub fn RoaringBitmap::add_range(Self, UInt32, UInt32) -> Self
+pub fn RoaringBitmap::add_sorted(Self, Array[UInt32]) -> Self
 pub fn RoaringBitmap::and_cardinality(Self, Self) -> Int64
 pub fn RoaringBitmap::andnot_cardinality(Self, Self) -> Int64
 pub fn RoaringBitmap::clear(Self) -> Self
@@ -36,9 +37,11 @@ pub fn RoaringBitmap::equals(Self, Self) -> Bool
 pub fn RoaringBitmap::flip(Self, UInt32, UInt32) -> Self
 pub fn RoaringBitmap::from_array(Array[UInt32]) -> Self
 pub fn RoaringBitmap::from_range(UInt32, UInt32) -> Self
+pub fn RoaringBitmap::from_sorted(Array[UInt32]) -> Self
 pub fn RoaringBitmap::get_stats(Self) -> RoaringStats
 pub fn RoaringBitmap::intersect(Self, Self) -> Self
 pub fn RoaringBitmap::intersect_all(Array[Self]) -> Self
+pub fn RoaringBitmap::intersects(Self, Self) -> Bool
 pub fn RoaringBitmap::is_empty(Self) -> Bool
 pub fn RoaringBitmap::is_subset(Self, Self) -> Bool
 pub fn RoaringBitmap::iter(Self) -> Iter[UInt32]
@@ -48,10 +51,13 @@ pub fn RoaringBitmap::min(Self) -> UInt32?
 pub fn RoaringBitmap::new() -> Self
 pub fn RoaringBitmap::not_equal(Self, Self) -> Bool
 pub fn RoaringBitmap::or_cardinality(Self, Self) -> Int64
+pub fn RoaringBitmap::portable_size_in_bytes(Self) -> Int32
 pub fn RoaringBitmap::range(Self, UInt32, UInt32) -> Self
+pub fn RoaringBitmap::range_cardinality(Self, UInt32, UInt32) -> Int64
 pub fn RoaringBitmap::rank(Self, UInt32) -> Int64
 pub fn RoaringBitmap::remove(Self, UInt32) -> Self
 pub fn RoaringBitmap::remove_range(Self, UInt32, UInt32) -> Self
+pub fn RoaringBitmap::run_optimize(Self) -> Self
 pub fn RoaringBitmap::select(Self, Int32) -> UInt32?
 pub fn RoaringBitmap::serialize(Self) -> Bytes
 pub fn RoaringBitmap::singleton(UInt32) -> Self

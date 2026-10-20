@@ -58,6 +58,34 @@ two 65536-element array decodes.
 Note that `and_cardinality`, `or_cardinality` and `xor_cardinality` are
 symmetric; `andnot_cardinality` is the one directional operation.
 
+### Counting inside a window
+
+`range_cardinality(start, end)` answers "how many are in this window" for a
+half-open interval, walking only the buckets the range touches:
+
+```moonbit
+let matched = term_a.intersect(term_b)
+assert_eq(matched.range_cardinality(1000U, 2000U), 512L)
+```
+
+Half-open to match `add_range`, `remove_range` and `contains_range`. The
+reference implementations disagree with each other about the convention here,
+so this follows the package's own rather than either of them. It is also
+cheaper and less error-prone than `rank(end - 1) - rank(start - 1)`, which has
+to special-case `start`.
+
+### Asking whether they overlap at all
+
+`intersects` is a short-circuiting boolean, and it stops at the first shared
+bucket rather than counting the whole intersection to answer a yes/no
+question:
+
+```moonbit
+if query_terms.exists(term => index.intersects(term)) {
+  // this document matches at least one term
+}
+```
+
 ### Why the return type is `Int64`
 
 A `RoaringBitmap` can hold up to 2^32 values, which does not fit in MoonBit's
@@ -242,6 +270,59 @@ error: not a decimal number: abc
 
 Hex input accepts an optional `0x`/`0X` prefix and any embedded whitespace,
 so output can be pasted straight from another tool.
+
+## Sizing and re-encoding after an interop read
+
+Two methods exist specifically for the read side of interoperability.
+
+`portable_size_in_bytes()` reports what `serialize()` will produce without
+building it, which is what you need to pre-size a send buffer or enforce a
+per-record byte budget. `get_stats().total_bytes_used` is the container payload
+alone and says nothing about the headers.
+
+```bash
+$ moon run cmd/main -- info $(moon run cmd/main -- encode --start 1000 --end 5000)
+values          4000
+min / max       1000 / 4999
+containers      1 (array 0, bitmap 0, run 1)
+container bytes 6
+serialized      15
+```
+
+`deserialize` keeps whatever representation the producer used, so a bitmap
+read from portable bytes its producer left as an Array stays an Array forever.
+`run_optimize()` re-encodes every container in its cheapest form — the same
+cost model the normal mutation path applies automatically, with an entry point
+for after an interop read:
+
+```moonbit
+let foreign = match @roaring.RoaringBitmap::deserialize(bytes) {
+  Ok(b) => b
+  Err(error) => panic("invalid bitmap: \{error}")
+}
+let optimized = foreign.run_optimize()
+// Same elements, and now the same encoding this library would have produced
+// from scratch.
+let canonical = @roaring.RoaringBitmap::from_array(foreign.to_array())
+assert_eq(optimized.serialize(), canonical.serialize())
+```
+
+Mirrors CRoaring's `roaring_bitmap_run_optimize` and Java's `runOptimize`.
+Cardinality is unchanged, so no bucket is ever dropped.
+
+## Importing ordered data
+
+`from_array` sorts its input, which is wasted work when the data is already
+ordered — the normal case for a database cursor, a file, or another bitmap's
+`iter()`. `from_sorted` skips the sort:
+
+```moonbit
+let from_cursor = @roaring.RoaringBitmap::from_sorted(rows.map(r => r.id))
+```
+
+Duplicates are collapsed, so the input need not be strictly increasing.
+Unsorted input produces a wrong result rather than an error: detecting it would
+cost more than the sort it avoids.
 
 ## Reading the container statistics
 

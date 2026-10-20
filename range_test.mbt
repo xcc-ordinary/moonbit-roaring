@@ -551,3 +551,39 @@ test "flip equals xor with the interval at bucket boundaries" {
     }
   }
 }
+
+///|
+test "range_cardinality agrees with counting the materialized window" {
+  let mut seed = 6161
+  for _trial = 0; _trial < 40; _trial = _trial + 1 {
+    seed = range_lcg(seed)
+    let count = 1 + seed % 120
+    let values = []
+    for _i = 0; _i < count; _i = _i + 1 {
+      seed = range_lcg(seed)
+      values.push((seed % 400000).reinterpret_as_uint())
+    }
+    let bm = @moonbit-roaring.RoaringBitmap::from_array(values)
+    seed = range_lcg(seed)
+    let a = (seed % 400000).reinterpret_as_uint()
+    seed = range_lcg(seed)
+    let b = (seed % 400000).reinterpret_as_uint()
+    let lo = if a < b { a } else { b }
+    let hi = if a < b { b } else { a }
+    let expected = bm.range(lo, hi).size()
+    assert_eq(bm.range_cardinality(lo, hi), expected)
+    // An empty window is zero, not an error.
+    assert_eq(bm.range_cardinality(hi, lo), 0L)
+  }
+}
+
+///|
+test "range_cardinality spans bucket boundaries" {
+  let bm = @moonbit-roaring.RoaringBitmap::from_range(0U, 200000U)
+  assert_eq(bm.range_cardinality(0U, 200000U), 200000L)
+  assert_eq(bm.range_cardinality(65530U, 65540U), 10L)
+  assert_eq(bm.range_cardinality(65536U, 65536U), 0L)
+  assert_eq(bm.range_cardinality(199999U, 200000U), 1L)
+  assert_eq(bm.range_cardinality(200000U, 300000U), 0L)
+  assert_eq(bm.range_cardinality(0U, 0U), 0L)
+}

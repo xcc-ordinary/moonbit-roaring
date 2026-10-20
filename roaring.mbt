@@ -131,13 +131,33 @@ pub fn RoaringBitmap::add_many(
   }
   let sorted = values.copy()
   sorted.sort()
-  // Group consecutive equal high keys. Because `sorted` is ascending, each
+  self.add_sorted(sorted)
+}
+
+///|
+/// Add multiple elements the caller has already sorted ascending.
+///
+/// Shares the grouping and merge walk with `add_many` but skips the sort,
+/// which is O(N log N) work the caller has usually already done — a database
+/// cursor, a file, or another bitmap's `iter()` all hand back ordered data.
+/// Duplicates are collapsed, so the input need not be strictly increasing.
+///
+/// Unsorted input produces a wrong result rather than an error: there is no
+/// cheap way to detect it, and checking would cost more than the sort.
+pub fn RoaringBitmap::add_sorted(
+  self : RoaringBitmap,
+  values : Array[UInt32],
+) -> RoaringBitmap {
+  if values.length() == 0 {
+    return self
+  }
+  // Group consecutive equal high keys. Because the input is ascending, each
   // group's low values come out ascending too, and duplicates are adjacent —
   // so the groups are already in the shape `optimize_container` and the
   // container merge below both require.
   let group_keys : Array[UInt16] = []
   let group_lows : Array[Array[UInt16]] = []
-  for v in sorted {
+  for v in values {
     let high = extract_high(v)
     let low = extract_low(v)
     if group_keys.length() > 0 && group_keys[group_keys.length() - 1] == high {
@@ -666,4 +686,40 @@ pub fn RoaringBitmap::get_stats(self : RoaringBitmap) -> RoaringStats {
     total_bytes_used: total_bytes,
     compression_ratio: total_bytes.to_double() / naive_bytes.to_double(),
   }
+}
+
+///|
+/// Build a bitmap from values the caller has already sorted ascending.
+///
+/// The counterpart to `to_array`, for importing ordered data from a database
+/// cursor, a file, or another bitmap's `iter()` without paying for a sort the
+/// caller has already done. Duplicates are collapsed.
+pub fn RoaringBitmap::from_sorted(values : Array[UInt32]) -> RoaringBitmap {
+  RoaringBitmap::new().add_sorted(values)
+}
+
+///|
+/// Re-encode every container in its cheapest representation.
+///
+/// `deserialize` keeps whatever representation the producer used, so a bitmap
+/// read from portable bytes its producer left as an Array stays an Array
+/// forever — even though `from_array` of the same values would have produced a
+/// Run. The normal mutation path applies this automatically; this is the entry
+/// point for it after an interop read, and the direct public proof that run
+/// compression is really wired into the cost model.
+///
+/// Mirrors CRoaring's `roaring_bitmap_run_optimize` and Java's `runOptimize`.
+/// Cardinality is unchanged, so no bucket is ever dropped.
+pub fn RoaringBitmap::run_optimize(self : RoaringBitmap) -> RoaringBitmap {
+  let result_containers = []
+  for hc in self.containers {
+    let values = container_to_sorted_array(hc.container)
+    let new_container = optimize_container(values)
+    result_containers.push(HighContainer::{
+      key: hc.key,
+      container: new_container,
+      cardinality: container_cardinality(new_container),
+    })
+  }
+  { containers: result_containers, size: self.size, }
 }

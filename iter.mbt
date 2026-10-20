@@ -175,3 +175,52 @@ pub fn RoaringBitmap::select(self : RoaringBitmap, index : Int32) -> UInt32? {
   }
   None
 }
+
+///|
+/// Count of elements in `c` within the local inclusive range [lo, hi].
+/// `container_rank` counts everything at or below a value, so this is the
+/// difference of two ranks; `lo == 0` needs no subtraction because there is
+/// nothing below it.
+fn container_rank_range(c : Container, lo : Int32, hi : Int32) -> Int32 {
+  let below = if lo <= 0 { 0 } else { container_rank(c, (lo - 1).to_uint16()) }
+  container_rank(c, hi.to_uint16()) - below
+}
+
+///|
+/// Number of elements in the half-open range `[start, end)`.
+///
+/// Half-open to match `add_range`, `remove_range` and `contains_range` — note
+/// that the reference implementations disagree with each other here, so this
+/// follows the package's own convention rather than either of them.
+///
+/// Walks only the buckets the range touches and counts inside each one, so it
+/// never decodes a bucket outside the range. Cheaper and less error-prone than
+/// `rank(end - 1) - rank(start - 1)`, which also has to special-case `start`.
+///
+/// Returns `Int64` for the same reason `rank` does.
+pub fn RoaringBitmap::range_cardinality(
+  self : RoaringBitmap,
+  start : UInt32,
+  end : UInt32,
+) -> Int64 {
+  if start >= end {
+    return 0L
+  }
+  let high_start = extract_high(start).to_int()
+  let high_end = extract_high(end - 1U).to_int()
+  let mut count = 0L
+  for high = high_start; high <= high_end; high = high + 1 {
+    let key = high.to_uint16()
+    match find_bucket(self.containers, key) {
+      NotFound(_) => ()
+      Found(idx) => {
+        let (lo, hi) = bucket_local_range(key, start, end)
+        count = count +
+          Int64::from_int(
+            container_rank_range(self.containers[idx].container, lo, hi),
+          )
+      }
+    }
+  }
+  count
+}

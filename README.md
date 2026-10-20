@@ -94,12 +94,16 @@ bitmap-level cumulative/order analytics respectively.
 - Array, Bitmap, and Run containers
 - standard set operations and multi-way union/intersection
 - cardinality-only variants (`and_cardinality`, `or_cardinality`,
-  `andnot_cardinality`, `xor_cardinality`) that count without building a
-  result bitmap
+  `andnot_cardinality`, `xor_cardinality`, `range_cardinality`) that count
+  without building a result bitmap
+- `intersects`, a short-circuiting "do these share anything"
 - half-open range construction, mutation, and containment
 - closed-interval complement (`flip`)
 - lazy `Iter[UInt]`, bitmap-level `rank` and `select`
-- Roaring portable serialization and strict deserialization
+- Roaring portable serialization, strict deserialization, and
+  `portable_size_in_bytes` for the wire size without building it
+- `from_sorted` for importing already-ordered data, and `run_optimize` for
+  re-encoding a bitmap read from another implementation
 - immutable compatibility helpers: `clear`, inclusive `range`, Jaccard similarity
 - statistics exposing container choices and encoded payload sizes
 
