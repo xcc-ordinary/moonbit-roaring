@@ -28,6 +28,9 @@ test "range keeps existing values inside inclusive bounds" {
     1U, 5U, 10U, 15U, 20U, 65536U,
   ])
   assert_eq(bitmap.range(5U, 15U).to_array(), [5U, 10U, 15U])
-  assert_true(bitmap.range(20U, 19U).is_empty())
+  // An inverted interval is a no-op, like add_range, remove_range, flip and
+  // contains_range. Returning an empty bitmap here would silently discard
+  // every value on swapped bounds.
+  assert_eq(bitmap.range(20U, 19U).to_array(), bitmap.to_array())
   assert_eq(bitmap.range(65536U, 65536U).to_array(), [65536U])
 }

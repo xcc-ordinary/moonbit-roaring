@@ -106,10 +106,6 @@ changed to `Int64` rather than left to wrap.
 `andnot_cardinality`, so it cannot be fooled by a wrapped count into
 reporting a non-subset as a subset.
 
-Be aware that `size()` still returns a 32-bit `Int`, so a bitmap holding more
-than 2147483647 elements cannot report its own cardinality through it. The
-cardinality methods above are the ones that stay exact.
-
 ## Ranges: half-open versus closed
 
 There are two range conventions in the API, and mixing them up is a real

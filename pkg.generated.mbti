@@ -15,14 +15,12 @@ pub let run_container_min_run_length : Int32
 // Errors
 
 // Types and methods
-type HighContainer derive(Eq)
-pub fn HighContainer::equal(Self, Self) -> Bool
-pub fn HighContainer::not_equal(Self, Self) -> Bool
+type HighContainer
 
 pub struct RoaringBitmap {
   containers : Array[HighContainer]
   size : Int64
-} derive(Eq)
+}
 pub fn RoaringBitmap::add(Self, UInt32) -> Self
 pub fn RoaringBitmap::add_many(Self, Array[UInt32]) -> Self
 pub fn RoaringBitmap::add_range(Self, UInt32, UInt32) -> Self
@@ -63,6 +61,7 @@ pub fn RoaringBitmap::union(Self, Self) -> Self
 pub fn RoaringBitmap::union_all(Array[Self]) -> Self
 pub fn RoaringBitmap::xor(Self, Self) -> Self
 pub fn RoaringBitmap::xor_cardinality(Self, Self) -> Int64
+pub impl Eq for RoaringBitmap
 
 pub enum RoaringError {
   DeserializationError(String)

@@ -28,7 +28,7 @@ priv enum Container {
   /// Consecutive ranges: run-length encoded
   /// Each run is [start, length] where length = actual_count - 1
   Run(Array[Run])
-} derive(Eq)
+}
 
 ///|
 /// A run represents a consecutive range [start, start+length]
@@ -54,19 +54,23 @@ struct HighContainer {
   key : UInt16
   container : Container
   cardinality : Int32 // cached element count for this container
-} derive(Eq)
-
-///|
-pub extend HighContainer with Eq::{equal, not_equal}
+}
 
 ///|
 /// The main RoaringBitmap structure
 pub struct RoaringBitmap {
   containers : Array[HighContainer] // sorted by key
   size : Int64 // total cardinality across all containers
-} derive(Eq)
+}
 
 ///|
+/// Content equality, implemented by hand rather than derived.
+///
+/// A bitmap can hold the same set under several container representations, and
+/// the derived `Eq` compares those structurally: a bitmap read from portable
+/// bytes its producer left as an Array would not equal the same set built here
+/// as a Run. That is exactly the interoperability path, so `==` has to mean set
+/// equality. See `RoaringBitmap::equals`, which holds the implementation.
 pub extend RoaringBitmap with Eq::{equal, not_equal}
 
 ///|
@@ -107,7 +111,12 @@ pub struct RoaringStats {
   bitmap_containers : Int32
   run_containers : Int32
   total_bytes_used : Int32
-  compression_ratio : Double // vs. naive bitmap
+  // Ratio of container payload to a naive flat bitmap of the same cardinality.
+  // Values above 1.0 mean the compressed form is LARGER than the naive one,
+  // which is the normal case for sparse data — read it as an expansion factor,
+  // not as "how much was saved". It also excludes the format headers, so it
+  // cannot be compared against the real wire size.
+  compression_ratio : Double
 } derive(Debug)
 
 ///|

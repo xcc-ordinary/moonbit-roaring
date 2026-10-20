@@ -67,8 +67,9 @@ let only_in_a = term_a.andnot_cardinality(term_b)
 let differs = term_a.xor_cardinality(term_b)
 ```
 
-`is_subset` 和 `jaccard_similarity` 都建立在这些方法之上，因此都不会为了读一个长度
-而物化整个交集。
+`is_subset` 直接走查容器，不经过 `andnot_cardinality`，因此累加过程中即使溢出，
+也不会把非子集误报成子集。`jaccard_similarity` 建立在基数方法之上，不会为了读一个
+长度而物化整个交集。
 
 三个可运行用户路径：
 

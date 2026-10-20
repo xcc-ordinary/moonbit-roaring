@@ -72,8 +72,11 @@ let only_in_a = term_a.andnot_cardinality(term_b)
 let differs = term_a.xor_cardinality(term_b)
 ```
 
-`is_subset` and `jaccard_similarity` are built on these, so neither
-materializes an intersection just to read its length.
+`is_subset` walks the containers directly rather than going through
+`andnot_cardinality`, so a count that overflowed on the way in cannot make it
+report a non-subset as a subset. `jaccard_similarity` is built on the
+cardinality path, so it never materializes an intersection just to read its
+length.
 
 Runnable user paths:
 

@@ -630,3 +630,58 @@ test "contains finds a value inside a Run container without scanning it" {
     assert_true(bm.contains(v))
   }
 }
+
+///|
+test "== is set equality, not representation equality" {
+  // `RoaringBitmap` does not derive `Eq`. A derived implementation would
+  // compare container representations, so a bitmap read from portable bytes
+  // its producer left as an Array would not equal the same set built here as
+  // a Run — which is exactly the interoperability path. The helper writes
+  // 0..count-1, so the canonical side has to match that set.
+  let canonical = @moonbit-roaring.RoaringBitmap::from_array([0U, 1U, 2U])
+  let foreign = match
+    @moonbit-roaring.RoaringBitmap::deserialize(array_container_bytes(3)) {
+    Ok(b) => b
+    Err(e) => {
+      println("fixture rejected: \{e}")
+      panic()
+    }
+  }
+  assert_eq(canonical.get_stats().run_containers, 1)
+  assert_eq(foreign.get_stats().array_containers, 1)
+  assert_true(canonical == foreign)
+  assert_true(foreign == canonical)
+  assert_true(canonical.equals(foreign))
+  // And the negative case still has to hold.
+  let other = @moonbit-roaring.RoaringBitmap::from_array([5U, 6U, 8U])
+  assert_false(canonical == other)
+  assert_false(canonical == @moonbit-roaring.RoaringBitmap::new())
+  assert_false(@moonbit-roaring.RoaringBitmap::new() == canonical)
+}
+
+///|
+test "== agrees with equals on randomized pairs across representations" {
+  // Same content, different representations, must compare equal both ways.
+  let mut seed = 8080
+  for _trial = 0; _trial < 20; _trial = _trial + 1 {
+    seed = batch_lcg(seed)
+    let count = 1 + seed % 60
+    let values = []
+    for _i = 0; _i < count; _i = _i + 1 {
+      seed = batch_lcg(seed)
+      values.push((seed % 5000).reinterpret_as_uint())
+    }
+    let canonical = @moonbit-roaring.RoaringBitmap::from_array(values)
+    // Round-trip through the portable format, which may re-represent it.
+    let round_tripped = match
+      @moonbit-roaring.RoaringBitmap::deserialize(canonical.serialize()) {
+      Ok(b) => b
+      Err(_) => {
+        println("round trip rejected a valid bitmap")
+        panic()
+      }
+    }
+    assert_eq(canonical == round_tripped, canonical.equals(round_tripped))
+    assert_true(canonical == round_tripped)
+  }
+}

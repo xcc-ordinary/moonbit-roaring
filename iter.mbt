@@ -155,9 +155,9 @@ pub fn RoaringBitmap::rank(self : RoaringBitmap, value : UInt32) -> Int64 {
 /// of bounds. Inverse of `rank` in the sense that
 /// `bm.select(bm.rank(x).to_int() - 1) == Some(x)` whenever `bm.contains(x)`.
 ///
-/// The bounds check tests `containers` rather than `size`: `size` is a 32-bit
-/// `Int` that wraps past 2^31 elements, and a wrapped value would make every
-/// index look out of range on a provably non-empty bitmap.
+/// The bounds check tests `containers` rather than the cached cardinality, so
+/// an accumulation that overflowed on the way in cannot make every index look
+/// out of range on a provably non-empty bitmap.
 pub fn RoaringBitmap::select(self : RoaringBitmap, index : Int32) -> UInt32? {
   if index < 0 || self.containers.length() == 0 {
     return None

@@ -89,15 +89,18 @@ fn container_contains_range(c : Container, lo : Int32, hi : Int32) -> Bool {
       true
     }
     Run(runs) => {
-      let mut found = false
+      // Runs are sorted, so stop as soon as one can no longer cover [lo, hi].
       for r in runs {
         let start = r.start.to_int()
+        if start > hi {
+          break
+        }
         let end = start + r.length.to_int()
         if lo >= start && hi <= end {
-          found = true
+          return true
         }
       }
-      found
+      false
     }
   }
 }
@@ -645,11 +648,10 @@ fn flip_range_in_bucket(
 /// implementations expose, and because a closed interval is the only way to
 /// name a range that runs through `UInt`'s maximum value.
 ///
-/// Be aware that `size()` returns a 32-bit signed `Int`, so a bitmap holding
-/// more than 2147483647 elements cannot report its own cardinality. Flipping
-/// the entire 32-bit universe (`flip(0U, 4294967295U)`) is therefore
-/// expressible but not countable — prefer the narrowest interval that
-/// answers your question.
+/// `size()` returns `Int64`, so the cardinality stays exact across the whole
+/// value space. Note that the materializing methods (`to_array`, `from_array`,
+/// `iter`, `add_many`) are still capped at 2147483647 elements by MoonBit's
+/// own `Array` length limit — see the README's scope section.
 pub fn RoaringBitmap::flip(
   self : RoaringBitmap,
   start : UInt32,

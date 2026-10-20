@@ -253,9 +253,8 @@ pub fn RoaringBitmap::size(self : RoaringBitmap) -> Int64 {
 ///|
 /// Check if empty.
 ///
-/// Tests the container list rather than `size`: `size` is a 32-bit `Int` that
-/// wraps past 2^31 elements, so a full 32-bit universe would otherwise report
-/// itself as empty while `contains`, `min` and `max` disagreed.
+/// Tests the container list rather than the cached cardinality, so it cannot
+/// be fooled by an accumulation that overflowed on the way in.
 pub fn RoaringBitmap::is_empty(self : RoaringBitmap) -> Bool {
   self.containers.length() == 0
 }
@@ -503,6 +502,29 @@ pub fn RoaringBitmap::intersect_all(
 /// bitmaps with the same elements are equal even if one stores a range as
 /// a Run and the other happens to store it as an Array.
 ///
+/// This is also what `==` means. `RoaringBitmap` does not derive `Eq`, because
+/// a derived implementation would compare container representations and report
+/// two equal sets as different — reachable by reading portable bytes from a
+/// producer that did not run-optimize.
+///
+/// Compares container by container rather than decoding both bitmaps to
+/// arrays: matching keys are compared in place when the representations agree
+/// (which is the common case, since anything built through the public API has
+/// a canonical representation) and only decoded when they differ. Equal
+/// cardinality implies equal container count, so the count check is a sound
+/// early-out.
+pub impl Eq for RoaringBitmap with fn equal(
+  self : RoaringBitmap,
+  other : RoaringBitmap,
+) -> Bool {
+  self.equals(other)
+}
+
+///|
+/// Structural equality by content, not by internal container layout: two
+/// bitmaps with the same elements are equal even if one stores a range as
+/// a Run and the other happens to store it as an Array.
+///
 /// Compares container by container rather than decoding both bitmaps to
 /// arrays: matching keys are compared in place when the representations agree
 /// (which is the common case, since anything built through the public API has
@@ -576,8 +598,11 @@ pub fn RoaringBitmap::range(
   start : UInt32,
   end : UInt32,
 ) -> RoaringBitmap {
+  // An inverted interval is a no-op, matching add_range, remove_range, flip
+  // and contains_range. Returning an empty bitmap instead would silently
+  // discard every value, which is a harsh outcome for swapped bounds.
   if start > end {
-    return RoaringBitmap::new()
+    return self
   }
   let selected : Array[UInt32] = []
   for value in self.to_array() {
