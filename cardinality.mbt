@@ -27,7 +27,7 @@
 fn bitmap_and_cardinality(
   w1 : FixedArray[UInt64],
   w2 : FixedArray[UInt64],
-) -> Int {
+) -> Int32 {
   let mut count = 0
   for i = 0; i < w1.length(); i = i + 1 {
     count = count + popcount64(w1[i] & w2[i])
@@ -39,7 +39,7 @@ fn bitmap_and_cardinality(
 fn bitmap_or_cardinality(
   w1 : FixedArray[UInt64],
   w2 : FixedArray[UInt64],
-) -> Int {
+) -> Int32 {
   let mut count = 0
   for i = 0; i < w1.length(); i = i + 1 {
     count = count + popcount64(w1[i] | w2[i])
@@ -51,7 +51,7 @@ fn bitmap_or_cardinality(
 fn bitmap_andnot_cardinality(
   w1 : FixedArray[UInt64],
   w2 : FixedArray[UInt64],
-) -> Int {
+) -> Int32 {
   let mut count = 0
   for i = 0; i < w1.length(); i = i + 1 {
     count = count + popcount64(w1[i] & w2[i].lnot())
@@ -63,7 +63,7 @@ fn bitmap_andnot_cardinality(
 fn bitmap_xor_cardinality(
   w1 : FixedArray[UInt64],
   w2 : FixedArray[UInt64],
-) -> Int {
+) -> Int32 {
   let mut count = 0
   for i = 0; i < w1.length(); i = i + 1 {
     count = count + popcount64(w1[i] ^ w2[i])
@@ -73,7 +73,7 @@ fn bitmap_xor_cardinality(
 
 ///|
 /// |A ∩ B| for two containers, counting without building the intersection.
-fn container_and_cardinality(c1 : Container, c2 : Container) -> Int {
+fn container_and_cardinality(c1 : Container, c2 : Container) -> Int32 {
   match (c1, c2) {
     (Bitmap(w1), Bitmap(w2)) => bitmap_and_cardinality(w1, w2)
     _ => {
@@ -100,7 +100,7 @@ fn container_and_cardinality(c1 : Container, c2 : Container) -> Int {
 
 ///|
 /// |A ∪ B| for two containers, counting without building the union.
-fn container_or_cardinality(c1 : Container, c2 : Container) -> Int {
+fn container_or_cardinality(c1 : Container, c2 : Container) -> Int32 {
   match (c1, c2) {
     (Bitmap(w1), Bitmap(w2)) => bitmap_or_cardinality(w1, w2)
     _ => {
@@ -129,7 +129,7 @@ fn container_or_cardinality(c1 : Container, c2 : Container) -> Int {
 
 ///|
 /// |A \ B| for two containers, counting without building the difference.
-fn container_andnot_cardinality(c1 : Container, c2 : Container) -> Int {
+fn container_andnot_cardinality(c1 : Container, c2 : Container) -> Int32 {
   match (c1, c2) {
     (Bitmap(w1), Bitmap(w2)) => bitmap_andnot_cardinality(w1, w2)
     _ => {
@@ -157,7 +157,7 @@ fn container_andnot_cardinality(c1 : Container, c2 : Container) -> Int {
 ///|
 /// |A ⊕ B| for two containers, counting without building the symmetric
 /// difference.
-fn container_xor_cardinality(c1 : Container, c2 : Container) -> Int {
+fn container_xor_cardinality(c1 : Container, c2 : Container) -> Int32 {
   match (c1, c2) {
     (Bitmap(w1), Bitmap(w2)) => bitmap_xor_cardinality(w1, w2)
     _ => {

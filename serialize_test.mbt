@@ -172,7 +172,7 @@ test "deserialize rejects a run cookie with a missing flag bitset" {
   // SERIAL_COOKIE with size-1 = 7 in the high half promises 8 containers,
   // hence one run-flag byte, but the input ends after the cookie word.
   let buf = @buffer.Buffer::Buffer()
-  let cookie : UInt = 12347U | (7U << 16)
+  let cookie : UInt32 = 12347U | (7U << 16)
   buf.write_uint_le(cookie)
   match @moonbit-roaring.RoaringBitmap::deserialize(buf.to_bytes()) {
     Ok(_) => fail("expected an error for a missing run-container bitset")

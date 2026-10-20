@@ -90,7 +90,7 @@ test "values across high-16-bit boundary are both stored" {
 
 ///|
 test "large value near UInt32 max round-trips" {
-  let big : UInt = 4294967295U // 2^32 - 1
+  let big : UInt32 = 4294967295U // 2^32 - 1
   let bm = @moonbit-roaring.RoaringBitmap::singleton(big)
   assert_true(bm.contains(big))
   assert_eq(bm.to_array(), [big])
@@ -407,7 +407,7 @@ test "intersect_all is empty when any bitmap is disjoint from the rest" {
 ///|
 /// A small deterministic generator, so these tests do not depend on
 /// `Math.random` (unavailable here) and stay reproducible.
-fn batch_lcg(seed : Int) -> Int {
+fn batch_lcg(seed : Int32) -> Int32 {
   let raw = seed * 1103515245 + 12345
   if raw < 0 {
     -raw % 1000000
@@ -500,7 +500,7 @@ test "add_many spreads one value per bucket across many containers" {
 /// an ARRAY container. `from_range` of the same values produces a Run, so this
 /// is how a test gets two bitmaps with identical content but different
 /// internal layout — the case `equals` exists for.
-fn array_container_bytes(count : Int) -> Bytes {
+fn array_container_bytes(count : Int32) -> Bytes {
   let buf = @buffer.Buffer::Buffer()
   buf.write_uint_le(12346U) // no-run cookie
   buf.write_uint_le(1U) // one container
@@ -578,7 +578,7 @@ test "equals agrees with array comparison on randomized pairs" {
 ///|
 /// Enough strided values to force a Bitmap container: consecutive data would
 /// collapse to a cheaper Run instead.
-fn bitmap_container_values(count : Int, offset : Int) -> Array[UInt] {
+fn bitmap_container_values(count : Int32, offset : Int32) -> Array[UInt32] {
   Array::makei(count, i => (offset + i * 2).reinterpret_as_uint())
 }
 

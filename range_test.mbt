@@ -377,7 +377,7 @@ test "flip of a single value toggles exactly that value" {
 // These tests pin that against the operations they are defined in terms of.
 
 ///|
-fn range_lcg(seed : Int) -> Int {
+fn range_lcg(seed : Int32) -> Int32 {
   let raw = seed * 1103515245 + 12345
   if raw < 0 {
     -raw % 1000000
@@ -490,8 +490,8 @@ test "the whole 32-bit space is one add_range call" {
 /// interval and runs the generic container xor.
 fn assert_flip_matches_xor(
   bm : @moonbit-roaring.RoaringBitmap,
-  start : UInt,
-  end : UInt,
+  start : UInt32,
+  end : UInt32,
 ) -> Unit raise {
   // `from_range` is half-open, so the interval is [start, end + 1). That
   // addition wraps when `end` is UInt's maximum, so the top of the range is

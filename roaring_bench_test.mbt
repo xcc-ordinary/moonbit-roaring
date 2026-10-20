@@ -7,18 +7,18 @@
 // cross-language or competitor speedup.
 
 ///|
-fn sparse_fixture() -> Array[UInt] {
+fn sparse_fixture() -> Array[UInt32] {
   Array::makei(4096, i => (i * 65537).reinterpret_as_uint())
 }
 
 ///|
-fn dense_fixture() -> Array[UInt] {
+fn dense_fixture() -> Array[UInt32] {
   Array::makei(16384, i => (i * 2).reinterpret_as_uint())
 }
 
 ///|
-fn mixed_fixture(offset : UInt) -> @moonbit-roaring.RoaringBitmap {
-  let values : Array[UInt] = [offset + 1U, offset + 100U]
+fn mixed_fixture(offset : UInt32) -> @moonbit-roaring.RoaringBitmap {
+  let values : Array[UInt32] = [offset + 1U, offset + 100U]
   for i = 0; i < 6000; i = i + 1 {
     values.push(offset + 65536U + i.reinterpret_as_uint())
   }
@@ -31,14 +31,14 @@ fn mixed_fixture(offset : UInt) -> @moonbit-roaring.RoaringBitmap {
 ///|
 /// Ascending values, so they all land in one bucket: this is the shape that
 /// used to pay a full array copy per inserted value.
-fn ascending_fixture(count : Int) -> Array[UInt] {
+fn ascending_fixture(count : Int32) -> Array[UInt32] {
   Array::makei(count, i => i.reinterpret_as_uint())
 }
 
 ///|
 /// One value per bucket, so the fixture forces `count` distinct containers:
 /// this is the shape that used to rebuild the container list per new bucket.
-fn distinct_key_fixture(count : Int) -> Array[UInt] {
+fn distinct_key_fixture(count : Int32) -> Array[UInt32] {
   Array::makei(count, i => (i * 65536).reinterpret_as_uint())
 }
 

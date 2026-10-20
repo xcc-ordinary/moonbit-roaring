@@ -7,7 +7,7 @@
 // install beyond the MoonBit toolchain.
 
 ///|
-fn hex_nibble(value : Int) -> Char {
+fn hex_nibble(value : Int32) -> Char {
   if value < 10 {
     (value + '0'.to_int()).unsafe_to_char()
   } else {
@@ -27,7 +27,7 @@ fn to_hex(data : Bytes) -> String {
 }
 
 ///|
-fn nibble_value(c : Char) -> Int? {
+fn nibble_value(c : Char) -> Int32? {
   if c >= '0' && c <= '9' {
     Some(c.to_int() - '0'.to_int())
   } else if c >= 'a' && c <= 'f' {
@@ -72,13 +72,13 @@ fn parse_hex(text : String) -> Result[Bytes, String] {
 }
 
 ///|
-fn parse_uint(text : String) -> Result[UInt, String] {
+fn parse_uint(text : String) -> Result[UInt32, String] {
   let chars = text.to_array()
   if chars.length() == 0 {
     return Err("empty number")
   }
-  let max_value : UInt = 4294967295U
-  let mut value : UInt = 0U
+  let max_value : UInt32 = 4294967295U
+  let mut value : UInt32 = 0U
   for c in chars {
     if c < '0' || c > '9' {
       return Err("not a decimal number: \{text}")

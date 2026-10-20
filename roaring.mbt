@@ -37,7 +37,7 @@ fn rebuild_size(containers : Array[HighContainer]) -> Int64 {
 /// A cardinality clamped to what a 32-bit `Int` can hold. Used where an `Int`
 /// is required but the value may legitimately exceed it — `Iter::new`'s
 /// `size_hint`, for instance, which is advisory.
-fn size_as_int(size : Int64) -> Int {
+fn size_as_int(size : Int64) -> Int32 {
   if size > 2147483647L {
     2147483647
   } else {
@@ -55,13 +55,13 @@ pub fn RoaringBitmap::new() -> RoaringBitmap {
 
 ///|
 /// Create from a single value
-pub fn RoaringBitmap::singleton(value : UInt) -> RoaringBitmap {
+pub fn RoaringBitmap::singleton(value : UInt32) -> RoaringBitmap {
   RoaringBitmap::new().add(value)
 }
 
 ///|
 /// Create from an array of values
-pub fn RoaringBitmap::from_array(values : Array[UInt]) -> RoaringBitmap {
+pub fn RoaringBitmap::from_array(values : Array[UInt32]) -> RoaringBitmap {
   RoaringBitmap::new().add_many(values)
 }
 
@@ -71,7 +71,10 @@ pub fn RoaringBitmap::from_array(values : Array[UInt]) -> RoaringBitmap {
 /// Add a single element. Decodes the target bucket's container, inserts the
 /// value, then re-optimizes container representation (may upgrade/downgrade
 /// between Array/Bitmap/Run).
-pub fn RoaringBitmap::add(self : RoaringBitmap, value : UInt) -> RoaringBitmap {
+pub fn RoaringBitmap::add(
+  self : RoaringBitmap,
+  value : UInt32,
+) -> RoaringBitmap {
   let high = extract_high(value)
   let low = extract_low(value)
   match find_bucket(self.containers, high) {
@@ -121,7 +124,7 @@ pub fn RoaringBitmap::add(self : RoaringBitmap, value : UInt) -> RoaringBitmap {
 /// take seconds where `add_range` takes microseconds for the same data.
 pub fn RoaringBitmap::add_many(
   self : RoaringBitmap,
-  values : Array[UInt],
+  values : Array[UInt32],
 ) -> RoaringBitmap {
   if values.length() == 0 {
     return self
@@ -184,7 +187,7 @@ pub fn RoaringBitmap::add_many(
 /// Remove a single element
 pub fn RoaringBitmap::remove(
   self : RoaringBitmap,
-  value : UInt,
+  value : UInt32,
 ) -> RoaringBitmap {
   let high = extract_high(value)
   let low = extract_low(value)
@@ -222,7 +225,7 @@ pub fn RoaringBitmap::remove(
 
 ///|
 /// Check if element exists
-pub fn RoaringBitmap::contains(self : RoaringBitmap, value : UInt) -> Bool {
+pub fn RoaringBitmap::contains(self : RoaringBitmap, value : UInt32) -> Bool {
   let high = extract_high(value)
   let low = extract_low(value)
   match find_bucket(self.containers, high) {
@@ -268,7 +271,7 @@ pub fn RoaringBitmap::clear(self : RoaringBitmap) -> RoaringBitmap {
 
 ///|
 /// Minimum element, if any
-pub fn RoaringBitmap::min(self : RoaringBitmap) -> UInt? {
+pub fn RoaringBitmap::min(self : RoaringBitmap) -> UInt32? {
   if self.containers.length() == 0 {
     None
   } else {
@@ -282,7 +285,7 @@ pub fn RoaringBitmap::min(self : RoaringBitmap) -> UInt? {
 
 ///|
 /// Maximum element, if any
-pub fn RoaringBitmap::max(self : RoaringBitmap) -> UInt? {
+pub fn RoaringBitmap::max(self : RoaringBitmap) -> UInt32? {
   if self.containers.length() == 0 {
     None
   } else {
@@ -570,13 +573,13 @@ pub fn RoaringBitmap::jaccard_similarity(
 /// `add_range`, and `remove_range`.
 pub fn RoaringBitmap::range(
   self : RoaringBitmap,
-  start : UInt,
-  end : UInt,
+  start : UInt32,
+  end : UInt32,
 ) -> RoaringBitmap {
   if start > end {
     return RoaringBitmap::new()
   }
-  let selected : Array[UInt] = []
+  let selected : Array[UInt32] = []
   for value in self.to_array() {
     if value >= start && value <= end {
       selected.push(value)
@@ -595,7 +598,7 @@ pub fn RoaringBitmap::range(
 /// Decode every container back into a flat, ascending Array[UInt]. O(n) in
 /// the bitmap's cardinality; prefer `contains`/`size` when you don't need
 /// every element materialized.
-pub fn RoaringBitmap::to_array(self : RoaringBitmap) -> Array[UInt] {
+pub fn RoaringBitmap::to_array(self : RoaringBitmap) -> Array[UInt32] {
   let result = []
   for hc in self.containers {
     let lows = container_to_sorted_array(hc.container)

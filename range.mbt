@@ -18,7 +18,7 @@ fn full_run_container() -> Container {
 }
 
 ///|
-fn range_to_array(lo : Int, hi : Int) -> Array[UInt16] {
+fn range_to_array(lo : Int32, hi : Int32) -> Array[UInt16] {
   let result = []
   for i = lo; i <= hi; i = i + 1 {
     result.push(i.to_uint16())
@@ -30,7 +30,11 @@ fn range_to_array(lo : Int, hi : Int) -> Array[UInt16] {
 /// Local (bucket-relative) inclusive bounds of `[start, end)` within the
 /// bucket identified by `key`. Caller guarantees the bucket actually
 /// intersects the range.
-fn bucket_local_range(key : UInt16, start : UInt, end : UInt) -> (Int, Int) {
+fn bucket_local_range(
+  key : UInt16,
+  start : UInt32,
+  end : UInt32,
+) -> (Int32, Int32) {
   let bucket_start = combine(key, (0 : UInt16))
   let bucket_end = combine(key, (65535 : UInt16))
   let last = end - 1U
@@ -52,7 +56,7 @@ fn bucket_local_range(key : UInt16, start : UInt, end : UInt) -> (Int, Int) {
 /// (lo == 0, hi == 65535) always collapses to a single Run regardless of
 /// prior contents: the union of "every value in this bucket" with anything
 /// already in the bucket is still "every value in this bucket".
-fn container_add_range(c : Container, lo : Int, hi : Int) -> Container {
+fn container_add_range(c : Container, lo : Int32, hi : Int32) -> Container {
   if lo == 0 && hi == 65535 {
     full_run_container()
   } else {
@@ -64,7 +68,7 @@ fn container_add_range(c : Container, lo : Int, hi : Int) -> Container {
 ///|
 /// Whether every value in the local inclusive range [lo, hi] is present in
 /// `c`, without decoding the container to an intermediate array.
-fn container_contains_range(c : Container, lo : Int, hi : Int) -> Bool {
+fn container_contains_range(c : Container, lo : Int32, hi : Int32) -> Bool {
   match c {
     Array(arr) =>
       match binary_search_u16(arr, lo.to_uint16()) {
@@ -114,8 +118,8 @@ fn container_contains_range(c : Container, lo : Int, hi : Int) -> Bool {
 /// overflow. Use `add` for that specific boundary value if needed.
 pub fn RoaringBitmap::add_range(
   self : RoaringBitmap,
-  start : UInt,
-  end : UInt,
+  start : UInt32,
+  end : UInt32,
 ) -> RoaringBitmap {
   if start >= end {
     return self
@@ -161,7 +165,7 @@ pub fn RoaringBitmap::add_range(
 /// Remove the local inclusive range `[lo, hi]` from a container. Returns
 /// `None` when nothing is left, so the caller can drop the bucket outright
 /// instead of storing an empty container.
-fn container_remove_range(c : Container, lo : Int, hi : Int) -> Container? {
+fn container_remove_range(c : Container, lo : Int32, hi : Int32) -> Container? {
   if lo == 0 && hi == 65535 {
     // Removing every value of a bucket leaves nothing behind.
     None
@@ -182,8 +186,8 @@ fn container_remove_range(c : Container, lo : Int, hi : Int) -> Container? {
 /// whole range is merged into the container list in one walk.
 pub fn RoaringBitmap::remove_range(
   self : RoaringBitmap,
-  start : UInt,
-  end : UInt,
+  start : UInt32,
+  end : UInt32,
 ) -> RoaringBitmap {
   if start >= end {
     return self
@@ -226,8 +230,8 @@ pub fn RoaringBitmap::remove_range(
 /// An empty range (`start >= end`) is trivially contained.
 pub fn RoaringBitmap::contains_range(
   self : RoaringBitmap,
-  start : UInt,
-  end : UInt,
+  start : UInt32,
+  end : UInt32,
 ) -> Bool {
   if start >= end {
     return true
@@ -252,7 +256,7 @@ pub fn RoaringBitmap::contains_range(
 ///|
 /// Create a bitmap containing every integer in the half-open range
 /// `[start, end)`.
-pub fn RoaringBitmap::from_range(start : UInt, end : UInt) -> RoaringBitmap {
+pub fn RoaringBitmap::from_range(start : UInt32, end : UInt32) -> RoaringBitmap {
   RoaringBitmap::new().add_range(start, end)
 }
 
@@ -268,9 +272,9 @@ pub fn RoaringBitmap::from_range(start : UInt, end : UInt) -> RoaringBitmap {
 /// full-universe complement case.
 fn bucket_local_closed_range(
   key : UInt16,
-  start : UInt,
-  end : UInt,
-) -> (Int, Int) {
+  start : UInt32,
+  end : UInt32,
+) -> (Int32, Int32) {
   let bucket_start = combine(key, (0 : UInt16))
   let bucket_end = combine(key, (65535 : UInt16))
   let lo = if start > bucket_start {
@@ -297,8 +301,8 @@ fn bucket_local_closed_range(
 /// is itself O(65536) for Run and Bitmap containers, so the saving is on the
 /// produced side, not the read side.
 fn range_minus_sorted(
-  lo : Int,
-  hi : Int,
+  lo : Int32,
+  hi : Int32,
   existing : Array[UInt16],
 ) -> Array[UInt16] {
   let result = []
@@ -327,7 +331,11 @@ fn range_minus_sorted(
 ///|
 /// Emit every set bit of one word, tagged with its position in the container.
 /// Cost is O(popcount), not O(64): a zero word costs one comparison.
-fn emit_set_bits(word : UInt64, word_start : Int, out : Array[UInt16]) -> Unit {
+fn emit_set_bits(
+  word : UInt64,
+  word_start : Int32,
+  out : Array[UInt16],
+) -> Unit {
   let mut bits = word
   while bits != 0UL {
     let bit = lowest_set_bit(bits)
@@ -341,9 +349,9 @@ fn emit_set_bits(word : UInt64, word_start : Int, out : Array[UInt16]) -> Unit {
 /// [lo, hi]. Both bounds are known to lie inside this word.
 fn emit_set_bits_outside(
   word : UInt64,
-  word_start : Int,
-  lo : Int,
-  hi : Int,
+  word_start : Int32,
+  lo : Int32,
+  hi : Int32,
   out : Array[UInt16],
 ) -> Unit {
   let mut bits = word
@@ -359,7 +367,7 @@ fn emit_set_bits_outside(
 
 ///|
 /// A mask with bits `from` through `to` set, for `0 <= from <= to <= 63`.
-fn bit_range_mask(from : Int, to : Int) -> UInt64 {
+fn bit_range_mask(from : Int32, to : Int32) -> UInt64 {
   let high = if to >= 63 {
     0xFFFFFFFFFFFFFFFFUL
   } else {
@@ -380,8 +388,8 @@ fn bit_range_mask(from : Int, to : Int) -> UInt64 {
 /// words rather than the O(65536) an array decode would pay.
 fn bitmap_values_outside_range(
   words : FixedArray[UInt64],
-  lo : Int,
-  hi : Int,
+  lo : Int32,
+  hi : Int32,
 ) -> Array[UInt16] {
   let result = []
   let first = lo / 64
@@ -408,8 +416,8 @@ fn bitmap_values_outside_range(
 /// actually covers — against the O(65536) decode the array path would pay.
 fn bitmap_gaps_in_range(
   words : FixedArray[UInt64],
-  lo : Int,
-  hi : Int,
+  lo : Int32,
+  hi : Int32,
 ) -> Array[UInt16] {
   let result = []
   let first_word = lo / 64
@@ -437,8 +445,8 @@ fn bitmap_gaps_in_range(
 /// are sorted, so this stops as soon as it passes the range.
 fn run_values_outside_range(
   runs : Array[Run],
-  lo : Int,
-  hi : Int,
+  lo : Int32,
+  hi : Int32,
 ) -> Array[UInt16] {
   let result = []
   for r in runs {
@@ -476,7 +484,11 @@ fn run_values_outside_range(
 /// Values ABSENT from the runs inside the local inclusive range [lo, hi],
 /// produced by walking the gaps between them. Cost is O(runs + values
 /// emitted) instead of decoding the runs into an array first.
-fn run_gaps_in_range(runs : Array[Run], lo : Int, hi : Int) -> Array[UInt16] {
+fn run_gaps_in_range(
+  runs : Array[Run],
+  lo : Int32,
+  hi : Int32,
+) -> Array[UInt16] {
   let result = []
   let mut cursor = lo
   for r in runs {
@@ -517,8 +529,8 @@ fn run_gaps_in_range(runs : Array[Run], lo : Int, hi : Int) -> Array[UInt16] {
 /// so complementing a dense bucket no longer costs a 65536-element array.
 fn container_flip_parts(
   c : Container,
-  lo : Int,
-  hi : Int,
+  lo : Int32,
+  hi : Int32,
 ) -> (Array[UInt16], Array[UInt16]) {
   match c {
     Array(arr) => {
@@ -551,7 +563,7 @@ fn container_flip_parts(
 /// that range, but complementing a bucket over its full range yields
 /// "everything the bucket did not already hold", which is only empty when
 /// the bucket held everything to begin with.
-fn container_flip_range(c : Container, lo : Int, hi : Int) -> Container? {
+fn container_flip_range(c : Container, lo : Int32, hi : Int32) -> Container? {
   let (kept, added) = container_flip_parts(c, lo, hi)
   let merged = sorted_union(kept, added)
   if merged.length() == 0 {
@@ -565,8 +577,8 @@ fn container_flip_range(c : Container, lo : Int, hi : Int) -> Container? {
 fn flip_range_in_bucket(
   containers : Array[HighContainer],
   key : UInt16,
-  lo : Int,
-  hi : Int,
+  lo : Int32,
+  hi : Int32,
 ) -> Array[HighContainer] {
   match find_bucket(containers, key) {
     NotFound(pos) => {
@@ -640,8 +652,8 @@ fn flip_range_in_bucket(
 /// answers your question.
 pub fn RoaringBitmap::flip(
   self : RoaringBitmap,
-  start : UInt,
-  end : UInt,
+  start : UInt32,
+  end : UInt32,
 ) -> RoaringBitmap {
   if start > end {
     return self

@@ -7,7 +7,7 @@
 
 ///|
 test "golden fixture: empty matches CRoaring bytes" {
-  let values : Array[UInt] = []
+  let values : Array[UInt32] = []
   let expected_bytes : Bytes = b"\x3a\x30\x00\x00\x00\x00\x00\x00"
   let bm = @moonbit-roaring.RoaringBitmap::from_array(values)
   assert_eq(bm.size(), 0)
@@ -25,7 +25,7 @@ test "golden fixture: empty matches CRoaring bytes" {
 
 ///|
 test "golden fixture: sparse_array matches CRoaring bytes" {
-  let values : Array[UInt] = [1U, 100U, 1000U, 50000U]
+  let values : Array[UInt32] = [1U, 100U, 1000U, 50000U]
   let expected_bytes : Bytes = b"\x3a\x30\x00\x00\x01\x00\x00\x00\x00\x00\x03\x00\x10\x00\x00\x00\x01\x00\x64\x00\xe8\x03\x50\xc3"
   let bm = @moonbit-roaring.RoaringBitmap::from_array(values)
   assert_eq(bm.size(), 4)
@@ -43,7 +43,7 @@ test "golden fixture: sparse_array matches CRoaring bytes" {
 
 ///|
 test "golden fixture: dense_bitmap matches CRoaring bytes" {
-  let values : Array[UInt] = [
+  let values : Array[UInt32] = [
     0U, 2U, 4U, 6U, 8U, 10U, 12U, 14U, 16U, 18U, 20U, 22U, 24U, 26U, 28U, 30U, 32U,
     34U, 36U, 38U, 40U, 42U, 44U, 46U, 48U, 50U, 52U, 54U, 56U, 58U, 60U, 62U, 64U,
     66U, 68U, 70U, 72U, 74U, 76U, 78U, 80U, 82U, 84U, 86U, 88U, 90U, 92U, 94U, 96U,
@@ -427,7 +427,7 @@ test "golden fixture: dense_bitmap matches CRoaring bytes" {
 
 ///|
 test "golden fixture: run_container matches CRoaring bytes" {
-  let values : Array[UInt] = [
+  let values : Array[UInt32] = [
     0U, 1U, 2U, 3U, 4U, 5U, 6U, 7U, 8U, 9U, 10U, 11U, 12U, 13U, 14U, 15U, 16U, 17U,
     18U, 19U, 20U, 21U, 22U, 23U, 24U, 25U, 26U, 27U, 28U, 29U, 30U, 31U, 32U, 33U,
     34U, 35U, 36U, 37U, 38U, 39U, 40U, 41U, 42U, 43U, 44U, 45U, 46U, 47U, 48U, 49U,
@@ -460,7 +460,7 @@ test "golden fixture: run_container matches CRoaring bytes" {
 
 ///|
 test "golden fixture: mixed_three_buckets matches CRoaring bytes" {
-  let values : Array[UInt] = [
+  let values : Array[UInt32] = [
     1U, 500U, 65536U, 65537U, 65538U, 65539U, 65540U, 65541U, 65542U, 65543U, 65544U,
     65545U, 65546U, 65547U, 65548U, 65549U, 65550U, 65551U, 65552U, 65553U, 65554U,
     65555U, 65556U, 65557U, 65558U, 65559U, 65560U, 65561U, 65562U, 65563U, 65564U,
@@ -1410,7 +1410,7 @@ test "golden fixture: mixed_three_buckets matches CRoaring bytes" {
 
 ///|
 test "golden fixture: six_buckets_offset_header matches CRoaring bytes" {
-  let values : Array[UInt] = [1U, 100001U, 200001U, 300001U, 400001U, 500001U]
+  let values : Array[UInt32] = [1U, 100001U, 200001U, 300001U, 400001U, 500001U]
   let expected_bytes : Bytes = b"\x3a\x30\x00\x00\x06\x00\x00\x00\x00\x00\x00\x00\x01\x00\x00\x00\x03\x00\x00\x00\x04\x00\x00\x00\x06\x00\x00\x00\x07\x00\x00\x00\x38\x00\x00\x00\x3a\x00\x00\x00\x3c\x00\x00\x00\x3e\x00\x00\x00\x40\x00\x00\x00\x42\x00\x00\x00\x01\x00\xa1\x86\x41\x0d\xe1\x93\x81\x1a\x21\xa1"
   let bm = @moonbit-roaring.RoaringBitmap::from_array(values)
   assert_eq(bm.size(), 6)
@@ -1428,7 +1428,7 @@ test "golden fixture: six_buckets_offset_header matches CRoaring bytes" {
 
 ///|
 test "golden fixture: tie_two_consecutive matches CRoaring bytes" {
-  let values : Array[UInt] = [10U, 11U]
+  let values : Array[UInt32] = [10U, 11U]
   let expected_bytes : Bytes = b"\x3a\x30\x00\x00\x01\x00\x00\x00\x00\x00\x01\x00\x10\x00\x00\x00\x0a\x00\x0b\x00"
   let bm = @moonbit-roaring.RoaringBitmap::from_array(values)
   assert_eq(bm.size(), 2)
@@ -1446,7 +1446,7 @@ test "golden fixture: tie_two_consecutive matches CRoaring bytes" {
 
 ///|
 test "golden fixture: tie_three_consecutive matches CRoaring bytes" {
-  let values : Array[UInt] = [10U, 11U, 12U]
+  let values : Array[UInt32] = [10U, 11U, 12U]
   let expected_bytes : Bytes = b"\x3b\x30\x00\x00\x01\x00\x00\x02\x00\x01\x00\x0a\x00\x02\x00"
   let bm = @moonbit-roaring.RoaringBitmap::from_array(values)
   assert_eq(bm.size(), 3)
@@ -1464,7 +1464,7 @@ test "golden fixture: tie_three_consecutive matches CRoaring bytes" {
 
 ///|
 test "golden fixture: tie_four_consecutive matches CRoaring bytes" {
-  let values : Array[UInt] = [10U, 11U, 12U, 13U]
+  let values : Array[UInt32] = [10U, 11U, 12U, 13U]
   let expected_bytes : Bytes = b"\x3b\x30\x00\x00\x01\x00\x00\x03\x00\x01\x00\x0a\x00\x03\x00"
   let bm = @moonbit-roaring.RoaringBitmap::from_array(values)
   assert_eq(bm.size(), 4)
@@ -1482,7 +1482,7 @@ test "golden fixture: tie_four_consecutive matches CRoaring bytes" {
 
 ///|
 test "golden fixture: tie_scattered_with_pair matches CRoaring bytes" {
-  let values : Array[UInt] = [1U, 5U, 9U, 20U, 21U, 40U, 77U, 300U, 900U]
+  let values : Array[UInt32] = [1U, 5U, 9U, 20U, 21U, 40U, 77U, 300U, 900U]
   let expected_bytes : Bytes = b"\x3a\x30\x00\x00\x01\x00\x00\x00\x00\x00\x08\x00\x10\x00\x00\x00\x01\x00\x05\x00\x09\x00\x14\x00\x15\x00\x28\x00\x4d\x00\x2c\x01\x84\x03"
   let bm = @moonbit-roaring.RoaringBitmap::from_array(values)
   assert_eq(bm.size(), 9)

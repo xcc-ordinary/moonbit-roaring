@@ -13,18 +13,18 @@
 // ============ UInt32 <-> (high16, low16) ============
 
 ///|
-fn extract_high(value : UInt) -> UInt16 {
+fn extract_high(value : UInt32) -> UInt16 {
   (value >> 16).reinterpret_as_int().to_uint16()
 }
 
 ///|
-fn extract_low(value : UInt) -> UInt16 {
+fn extract_low(value : UInt32) -> UInt16 {
   let low_bits = value % 65536U
   low_bits.reinterpret_as_int().to_uint16()
 }
 
 ///|
-fn combine(high : UInt16, low : UInt16) -> UInt {
+fn combine(high : UInt16, low : UInt16) -> UInt32 {
   let high_bits = high.to_int().reinterpret_as_uint() << 16
   let low_bits = low.to_int().reinterpret_as_uint()
   high_bits | low_bits
@@ -226,7 +226,7 @@ fn runs_to_array(runs : Array[Run]) -> Array[UInt16] {
 }
 
 ///|
-fn run_cardinality(runs : Array[Run]) -> Int {
+fn run_cardinality(runs : Array[Run]) -> Int32 {
   let mut total = 0
   for r in runs {
     total = total + r.length.to_int() + 1
@@ -265,7 +265,7 @@ fn bitmap_to_array(words : FixedArray[UInt64]) -> Array[UInt16] {
 }
 
 ///|
-fn popcount64(word : UInt64) -> Int {
+fn popcount64(word : UInt64) -> Int32 {
   let mut w = word
   let mut count = 0
   while w != 0UL {
@@ -276,7 +276,7 @@ fn popcount64(word : UInt64) -> Int {
 }
 
 ///|
-fn bitmap_cardinality(words : FixedArray[UInt64]) -> Int {
+fn bitmap_cardinality(words : FixedArray[UInt64]) -> Int32 {
   let mut total = 0
   for word_idx = 0; word_idx < words.length(); word_idx = word_idx + 1 {
     total = total + popcount64(words[word_idx])
@@ -296,7 +296,7 @@ fn container_to_sorted_array(c : Container) -> Array[UInt16] {
 }
 
 ///|
-fn container_cardinality(c : Container) -> Int {
+fn container_cardinality(c : Container) -> Int32 {
   match c {
     Array(arr) => arr.length()
     Bitmap(bm) => bitmap_cardinality(bm)
@@ -310,7 +310,7 @@ fn container_cardinality(c : Container) -> Int {
 /// Binary search rather than a shift loop. This runs once per emitted bit in
 /// the complement paths, where a linear scan would cost more than the 64-bit
 /// loop it was meant to replace.
-fn lowest_set_bit(word : UInt64) -> Int {
+fn lowest_set_bit(word : UInt64) -> Int32 {
   if word == 0UL {
     -1
   } else {
@@ -345,7 +345,7 @@ fn lowest_set_bit(word : UInt64) -> Int {
 
 ///|
 /// Index of the highest set bit in a non-zero word, or -1 if the word is zero.
-fn highest_set_bit(word : UInt64) -> Int {
+fn highest_set_bit(word : UInt64) -> Int32 {
   if word == 0UL {
     -1
   } else {

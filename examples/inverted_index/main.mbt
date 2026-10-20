@@ -12,7 +12,7 @@
 ///|
 fn build_postings(
   term : String,
-  doc_ids : Array[UInt],
+  doc_ids : Array[UInt32],
 ) -> (String, @roaring.RoaringBitmap) {
   (term, @roaring.RoaringBitmap::from_array(doc_ids))
 }

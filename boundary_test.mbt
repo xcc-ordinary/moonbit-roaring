@@ -125,7 +125,7 @@ test "0 and UInt32 max coexist without collision" {
 ///|
 test "values straddling a mid-range bucket boundary" {
   // 2^31 sits exactly on a high-16 boundary (bucket 32768).
-  let boundary : UInt = 2147483648U // 2^31
+  let boundary : UInt32 = 2147483648U // 2^31
   let bm = @moonbit-roaring.RoaringBitmap::from_array([boundary - 1, boundary])
   assert_eq(bm.size(), 2)
   assert_true(bm.contains(boundary - 1))

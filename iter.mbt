@@ -5,7 +5,7 @@
 
 ///|
 /// Count of elements in `c` that are <= `value` (0-indexed rank).
-fn container_rank(c : Container, value : UInt16) -> Int {
+fn container_rank(c : Container, value : UInt16) -> Int32 {
   match c {
     Array(arr) =>
       match binary_search_u16(arr, value) {
@@ -48,7 +48,7 @@ fn container_rank(c : Container, value : UInt16) -> Int {
 ///|
 /// The value at `index` (0-indexed) among the container's elements in
 /// ascending order. Caller guarantees `0 <= index < container_cardinality(c)`.
-fn container_select(c : Container, index : Int) -> UInt16 {
+fn container_select(c : Container, index : Int32) -> UInt16 {
   match c {
     Array(arr) => arr[index]
     Bitmap(bm) => {
@@ -96,7 +96,7 @@ fn container_select(c : Container, index : Int) -> UInt16 {
 /// container at a time rather than materializing the whole bitmap up front
 /// (as `to_array()` does), so `bm.iter().take(n)` or `bm.iter().find_first(f)`
 /// can stop without paying to decode buckets past where iteration stopped.
-pub fn RoaringBitmap::iter(self : RoaringBitmap) -> Iter[UInt] {
+pub fn RoaringBitmap::iter(self : RoaringBitmap) -> Iter[UInt32] {
   let containers = self.containers
   let mut bucket_idx = 0
   let mut current : Array[UInt16] = []
@@ -133,7 +133,7 @@ pub fn RoaringBitmap::iter(self : RoaringBitmap) -> Iter[UInt] {
 /// bitmap can hold up to 2^32 values, which does not fit in MoonBit's 32-bit
 /// signed `Int`, and a wrapped accumulator would report a negative count.
 /// CRoaring's counterpart returns `uint64_t`.
-pub fn RoaringBitmap::rank(self : RoaringBitmap, value : UInt) -> Int64 {
+pub fn RoaringBitmap::rank(self : RoaringBitmap, value : UInt32) -> Int64 {
   let high = extract_high(value)
   let low = extract_low(value)
   let mut count = 0L
@@ -158,7 +158,7 @@ pub fn RoaringBitmap::rank(self : RoaringBitmap, value : UInt) -> Int64 {
 /// The bounds check tests `containers` rather than `size`: `size` is a 32-bit
 /// `Int` that wraps past 2^31 elements, and a wrapped value would make every
 /// index look out of range on a provably non-empty bitmap.
-pub fn RoaringBitmap::select(self : RoaringBitmap, index : Int) -> UInt? {
+pub fn RoaringBitmap::select(self : RoaringBitmap, index : Int32) -> UInt32? {
   if index < 0 || self.containers.length() == 0 {
     return None
   }

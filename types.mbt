@@ -3,10 +3,10 @@
 
 ///|
 /// Container size thresholds
-pub let array_container_max_size : Int = 4096
+pub let array_container_max_size : Int32 = 4096
 
 ///|
-pub let bitmap_container_size_bytes : Int = 8192 // 2^16 bits / 8 = 8KB
+pub let bitmap_container_size_bytes : Int32 = 8192 // 2^16 bits / 8 = 8KB
 
 ///|
 /// Descriptive, not enforced: the shortest run-length-encoded sequence worth
@@ -15,7 +15,7 @@ pub let bitmap_container_size_bytes : Int = 8192 // 2^16 bits / 8 = 8KB
 /// bytes against an array element's 2. It is kept as published 0.1.0 API so
 /// that callers referring to it do not break; read `optimize_container` for
 /// the rule that actually governs container selection.
-pub let run_container_min_run_length : Int = 2
+pub let run_container_min_run_length : Int32 = 2
 
 ///|
 /// Container types - the core of Roaring's compression strategy
@@ -53,7 +53,7 @@ pub extend Run with Debug::{to_repr}
 struct HighContainer {
   key : UInt16
   container : Container
-  cardinality : Int // cached element count for this container
+  cardinality : Int32 // cached element count for this container
 } derive(Eq)
 
 ///|
@@ -95,18 +95,18 @@ pub extend RoaringError with Show::{to_string, output}
 ///|
 /// Binary search result for sorted arrays/container lists
 priv enum SearchResult {
-  Found(Int)
-  NotFound(Int)
+  Found(Int32)
+  NotFound(Int32)
 }
 
 ///|
 /// Statistics for debugging and optimization verification
 pub struct RoaringStats {
-  total_containers : Int
-  array_containers : Int
-  bitmap_containers : Int
-  run_containers : Int
-  total_bytes_used : Int
+  total_containers : Int32
+  array_containers : Int32
+  bitmap_containers : Int32
+  run_containers : Int32
+  total_bytes_used : Int32
   compression_ratio : Double // vs. naive bitmap
 } derive(Debug)
 

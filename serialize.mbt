@@ -4,13 +4,13 @@
 // container data. All integers are little-endian.
 
 ///|
-let serial_cookie_no_runcontainer : UInt = 12346U
+let serial_cookie_no_runcontainer : UInt32 = 12346U
 
 ///|
-let serial_cookie : UInt = 12347U
+let serial_cookie : UInt32 = 12347U
 
 ///|
-let no_offset_threshold : Int = 4
+let no_offset_threshold : Int32 = 4
 
 ///|
 fn has_run_container(containers : Array[HighContainer]) -> Bool {
@@ -25,7 +25,7 @@ fn has_run_container(containers : Array[HighContainer]) -> Bool {
 }
 
 ///|
-fn container_byte_size(c : Container) -> Int {
+fn container_byte_size(c : Container) -> Int32 {
   match c {
     Array(arr) => arr.length() * 2
     Bitmap(_) => bitmap_container_size_bytes
@@ -101,7 +101,7 @@ pub fn RoaringBitmap::serialize(self : RoaringBitmap) -> Bytes {
     }
   } else {
     // SERIAL_COOKIE layout: low 16 bits = cookie, high 16 bits = size - 1.
-    let cookie_word : UInt = serial_cookie |
+    let cookie_word : UInt32 = serial_cookie |
       ((size - 1).reinterpret_as_uint() << 16)
     buf.write_uint_le(cookie_word)
     for b in run_flag_bytes(containers) {
@@ -130,14 +130,14 @@ pub fn RoaringBitmap::serialize(self : RoaringBitmap) -> Bytes {
 
 ///|
 priv struct ParsedCookie {
-  size : Int
+  size : Int32
   has_runs : Bool
   run_flags : Array[Byte]
-  next_pos : Int
+  next_pos : Int32
 }
 
 ///|
-fn check_len(data : Bytes, pos : Int, need : Int) -> Bool {
+fn check_len(data : Bytes, pos : Int32, need : Int32) -> Bool {
   pos >= 0 && need >= 0 && pos + need <= data.length()
 }
 
@@ -185,7 +185,7 @@ fn parse_cookie(data : Bytes) -> Result[ParsedCookie, RoaringError] {
 }
 
 ///|
-fn is_run_flag_set(run_flags : Array[Byte], k : Int) -> Bool {
+fn is_run_flag_set(run_flags : Array[Byte], k : Int32) -> Bool {
   let byte_idx = k / 8
   let bit = k % 8
   if byte_idx >= run_flags.length() {
@@ -198,8 +198,8 @@ fn is_run_flag_set(run_flags : Array[Byte], k : Int) -> Bool {
 ///|
 fn read_array_container(
   data : Bytes,
-  pos : Int,
-  cardinality : Int,
+  pos : Int32,
+  cardinality : Int32,
 ) -> Array[UInt16] {
   let arr = []
   for i = 0; i < cardinality; i = i + 1 {
@@ -209,7 +209,7 @@ fn read_array_container(
 }
 
 ///|
-fn read_bitmap_container(data : Bytes, pos : Int) -> FixedArray[UInt64] {
+fn read_bitmap_container(data : Bytes, pos : Int32) -> FixedArray[UInt64] {
   let words = FixedArray::make(1024, 0UL)
   for i = 0; i < 1024; i = i + 1 {
     words[i] = data.unsafe_read_uint64_le(pos + i * 8)
@@ -268,7 +268,7 @@ pub fn RoaringBitmap::deserialize(
     return Err(DeserializationError("truncated: descriptive header"))
   }
   let keys : Array[UInt16] = []
-  let cardinalities : Array[Int] = []
+  let cardinalities : Array[Int32] = []
   for k = 0; k < size; k = k + 1 {
     let key = data.unsafe_read_uint16_le(pos)
     let card_minus1 = data.unsafe_read_uint16_le(pos + 2)
@@ -284,7 +284,7 @@ pub fn RoaringBitmap::deserialize(
 
   // Offset header: present under the same rule used when writing.
   let has_offsets = !has_runs || size >= no_offset_threshold
-  let offsets : Array[UInt] = []
+  let offsets : Array[UInt32] = []
   if has_offsets {
     if !check_len(data, pos, 4 * size) {
       return Err(DeserializationError("truncated: offset header"))

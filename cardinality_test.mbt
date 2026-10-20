@@ -13,7 +13,7 @@
 /// `count` values starting at `offset`, stepping by two. Striding by two is
 /// what defeats run-length encoding, which is how a test forces the Bitmap
 /// container representation instead of getting a Run for free.
-fn strided_values(count : Int, offset : Int) -> Array[UInt] {
+fn strided_values(count : Int32, offset : Int32) -> Array[UInt32] {
   Array::makei(count, i => (offset + i * 2).reinterpret_as_uint())
 }
 
