@@ -72,7 +72,10 @@ fn container_select(c : Container, index : Int32) -> UInt16 {
           remaining = remaining - word_count
         }
       }
-      (0 : UInt16)
+      // Unreachable while the caller honours the documented contract. Abort
+      // rather than fall through to 0, which would be a silently wrong answer
+      // for whoever breaks that contract next.
+      abort("container_select: index out of range for a Bitmap container")
     }
     Run(runs) => {
       let mut remaining = index
@@ -84,7 +87,7 @@ fn container_select(c : Container, index : Int32) -> UInt16 {
         }
         remaining = remaining - len
       }
-      (0 : UInt16)
+      abort("container_select: index out of range for a Run container")
     }
   }
 }
