@@ -94,6 +94,7 @@ moon run examples/analytics
 - bitmap 级 `rank` 和 `select`
 - Roaring portable 序列化、严格反序列化，以及不构造编码即可得知线上大小的
   `portable_size_in_bytes`
+- `deserialize_at`：从更大的缓冲区中读出一个位图
 - `from_sorted`：导入已有序数据；`run_optimize`：重新编码从其他实现读入的位图
 - 不修改原对象的兼容 API：`clear`、闭区间 `range`、Jaccard 相似度
 - 容器选择和编码 payload 大小统计

@@ -104,6 +104,7 @@ bitmap-level cumulative/order analytics respectively.
 - bitmap-level `rank` and `select`
 - Roaring portable serialization, strict deserialization, and
   `portable_size_in_bytes` for the wire size without building it
+- `deserialize_at` for reading one bitmap out of a larger buffer
 - `from_sorted` for importing already-ordered data, and `run_optimize` for
   re-encoding a bitmap read from another implementation
 - immutable compatibility helpers: `clear`, inclusive `range`, Jaccard similarity

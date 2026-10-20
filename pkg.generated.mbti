@@ -31,6 +31,7 @@ pub fn RoaringBitmap::clear(Self) -> Self
 pub fn RoaringBitmap::contains(Self, UInt32) -> Bool
 pub fn RoaringBitmap::contains_range(Self, UInt32, UInt32) -> Bool
 pub fn RoaringBitmap::deserialize(Bytes) -> Result[Self, RoaringError]
+pub fn RoaringBitmap::deserialize_at(Bytes, Int32) -> Result[(Self, Int32), RoaringError]
 pub fn RoaringBitmap::difference(Self, Self) -> Self
 pub fn RoaringBitmap::equal(Self, Self) -> Bool
 pub fn RoaringBitmap::equals(Self, Self) -> Bool

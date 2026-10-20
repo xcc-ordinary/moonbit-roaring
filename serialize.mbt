@@ -169,41 +169,44 @@ fn check_len(data : Bytes, pos : Int32, need : Int32) -> Bool {
 }
 
 ///|
-fn parse_cookie(data : Bytes) -> Result[ParsedCookie, RoaringError] {
-  if !check_len(data, 0, 4) {
+fn parse_cookie(
+  data : Bytes,
+  pos : Int32,
+) -> Result[ParsedCookie, RoaringError] {
+  if !check_len(data, pos, 4) {
     return Err(DeserializationError("input too short for cookie header"))
   }
-  let cookie_word = data.unsafe_read_uint32_le(0)
+  let cookie_word = data.unsafe_read_uint32_le(pos)
   let low16 = cookie_word % 65536U
   if low16 == serial_cookie_no_runcontainer {
-    if !check_len(data, 4, 4) {
+    if !check_len(data, pos + 4, 4) {
       return Err(DeserializationError("truncated: missing container count"))
     }
-    let sz = data.unsafe_read_uint32_le(4).reinterpret_as_int()
+    let sz = data.unsafe_read_uint32_le(pos + 4).reinterpret_as_int()
     let parsed : ParsedCookie = {
       size: sz,
       has_runs: false,
       run_flags: [],
-      next_pos: 8,
+      next_pos: pos + 8,
     }
     Ok(parsed)
   } else if low16 == serial_cookie {
     let sz = (cookie_word / 65536U).reinterpret_as_int() + 1
     let flag_len = (sz + 7) / 8
-    if !check_len(data, 4, flag_len) {
+    if !check_len(data, pos + 4, flag_len) {
       return Err(
         DeserializationError("truncated: missing run-container bitset"),
       )
     }
     let flags = []
     for i = 0; i < flag_len; i = i + 1 {
-      flags.push(data.unsafe_get(4 + i))
+      flags.push(data.unsafe_get(pos + 4 + i))
     }
     let parsed : ParsedCookie = {
       size: sz,
       has_runs: true,
       run_flags: flags,
-      next_pos: 4 + flag_len,
+      next_pos: pos + 4 + flag_len,
     }
     Ok(parsed)
   } else {
@@ -272,13 +275,25 @@ fn runs_are_sorted_and_disjoint(runs : Array[Run]) -> Bool {
 }
 
 ///|
-/// Deserialize from the CRoaring-compatible portable binary format.
+/// Deserialize from the CRoaring-compatible portable binary format, starting
+/// at offset `pos`.
+///
+/// Returns the bitmap together with the offset just past it, so a caller can
+/// read a bitmap out of a larger buffer — a length-prefixed frame, a
+/// concatenated file, or a slice of a bigger message — without having to guess
+/// where this bitmap ends. Bytes after the returned offset are not examined.
+///
 /// Rejects truncated or malformed input with a RoaringError rather than
 /// reading out of bounds.
-pub fn RoaringBitmap::deserialize(
+pub fn RoaringBitmap::deserialize_at(
   data : Bytes,
-) -> Result[RoaringBitmap, RoaringError] {
-  let parsed = match parse_cookie(data) {
+  pos : Int32,
+) -> Result[(RoaringBitmap, Int32), RoaringError] {
+  // The portable format stores container offsets relative to the start of the
+  // bitmap, not to the start of the buffer, so every offset comparison has to
+  // be made relative to where this bitmap begins.
+  let base = pos
+  let parsed = match parse_cookie(data, pos) {
     Ok(p) => p
     Err(e) => return Err(e)
   }
@@ -325,7 +340,7 @@ pub fn RoaringBitmap::deserialize(
   // Container data, in key order.
   let containers : Array[HighContainer] = []
   for k = 0; k < size; k = k + 1 {
-    if has_offsets && offsets[k] != pos.reinterpret_as_uint() {
+    if has_offsets && offsets[k] != (pos - base).reinterpret_as_uint() {
       return Err(DeserializationError("invalid container offset"))
     }
     let cardinality = cardinalities[k]
@@ -383,11 +398,32 @@ pub fn RoaringBitmap::deserialize(
       cardinality: container_cardinality(container),
     })
   }
-  if pos != data.length() {
-    return Err(DeserializationError("trailing bytes after bitmap"))
-  }
   let total = rebuild_size(containers)
-  Ok({ containers, size: total, })
+  Ok(({ containers, size: total, }, pos))
+}
+
+///|
+/// Deserialize a buffer that holds exactly one bitmap and nothing else.
+///
+/// Stricter than `deserialize_at`: trailing bytes are an error rather than
+/// something to ignore, which is what catches a truncated frame or a buffer
+/// that was concatenated by mistake. Use `deserialize_at` when the bitmap is
+/// only part of the buffer.
+///
+/// Rejects truncated or malformed input with a RoaringError rather than
+/// reading out of bounds.
+pub fn RoaringBitmap::deserialize(
+  data : Bytes,
+) -> Result[RoaringBitmap, RoaringError] {
+  match RoaringBitmap::deserialize_at(data, 0) {
+    Ok((bitmap, end)) =>
+      if end != data.length() {
+        Err(DeserializationError("trailing bytes after bitmap"))
+      } else {
+        Ok(bitmap)
+      }
+    Err(e) => Err(e)
+  }
 }
 
 ///|

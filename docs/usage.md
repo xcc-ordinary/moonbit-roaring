@@ -223,6 +223,24 @@ cardinality mismatches and trailing bytes, rather than reading out of bounds
 or silently accepting a malformed bitmap. If a producer you trust is being
 rejected, that rejection is the finding.
 
+That strictness is scoped to "this buffer holds exactly one bitmap". When the
+bitmap is only *part* of the buffer — a length-prefixed frame, a concatenated
+file, a slice of a larger message — use `deserialize_at`, which starts at a
+given offset and reports where the bitmap ended:
+
+```moonbit
+let (bitmap, end) = match @roaring.RoaringBitmap::deserialize_at(buffer, offset) {
+  Ok(pair) => pair
+  Err(error) => panic("invalid bitmap at \{offset}: \{error}")
+}
+// `end` is the first byte after this bitmap, so the next frame starts there.
+```
+
+Bytes after `end` are not examined, and `deserialize` remains the strict
+wrapper that rejects a buffer holding anything other than exactly one bitmap.
+The two are separate functions rather than a mode flag, for the same reason the
+package has no boolean serialization mode.
+
 ## The `roaring` command-line tool
 
 `cmd/main` drives the portable format from a shell. Bytes travel as hex, so

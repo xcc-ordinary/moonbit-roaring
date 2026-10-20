@@ -279,3 +279,184 @@ test "portable_size_in_bytes does not allocate the encoding" {
   assert_true(predicted > 0)
   assert_eq(predicted, huge.serialize().length())
 }
+
+// ============ deserialize_at: reading a bitmap out of a larger buffer ============
+
+///|
+/// Two bitmaps back to back, with a sentinel byte on each side.
+fn concatenated_fixtures() -> Bytes {
+  let first = @moonbit-roaring.RoaringBitmap::from_array([1U, 100U, 1000U])
+  let second = @moonbit-roaring.RoaringBitmap::from_range(0U, 200U)
+  let buf = @buffer.Buffer::Buffer()
+  buf.write_byte(0xAB) // leading sentinel
+  for b in first.serialize() {
+    buf.write_byte(b)
+  }
+  buf.write_byte(0xCD) // separator
+  for b in second.serialize() {
+    buf.write_byte(b)
+  }
+  buf.write_byte(0xEF) // trailing sentinel
+  buf.to_bytes()
+}
+
+///|
+test "deserialize_at reads a bitmap out of a larger buffer" {
+  let data = concatenated_fixtures()
+  let first_bytes = @moonbit-roaring.RoaringBitmap::from_array([1U, 100U, 1000U]).serialize()
+  let (first, after_first) = match
+    @moonbit-roaring.RoaringBitmap::deserialize_at(data, 1) {
+    Ok(pair) => pair
+    Err(e) => {
+      println("deserialize_at rejected a valid prefix: \{e}")
+      panic()
+    }
+  }
+  assert_eq(first.to_array(), [1U, 100U, 1000U])
+  assert_eq(after_first, 1 + first_bytes.length())
+  // The byte at that offset is the separator, not the start of a bitmap.
+  assert_eq(data[after_first], (0xCD : Byte))
+}
+
+///|
+test "deserialize_at chains through a concatenated buffer" {
+  let data = concatenated_fixtures()
+  let (first, after_first) = match
+    @moonbit-roaring.RoaringBitmap::deserialize_at(data, 1) {
+    Ok(pair) => pair
+    Err(_) => {
+      println("first read failed")
+      panic()
+    }
+  }
+  // Skip the separator and read the second bitmap.
+  let (second, after_second) = match
+    @moonbit-roaring.RoaringBitmap::deserialize_at(data, after_first + 1) {
+    Ok(pair) => pair
+    Err(e) => {
+      println("second read failed: \{e}")
+      panic()
+    }
+  }
+  assert_eq(first.to_array(), [1U, 100U, 1000U])
+  assert_eq(second.size(), 200)
+  // The remaining byte is the trailing sentinel.
+  assert_eq(after_second, data.length() - 1)
+  assert_eq(data[after_second], (0xEF : Byte))
+}
+
+///|
+test "deserialize_at rejects a bad offset without reading out of bounds" {
+  let data = concatenated_fixtures()
+  // Past the end.
+  assert_true(
+    @moonbit-roaring.RoaringBitmap::deserialize_at(data, data.length())
+    is Err(_),
+  )
+  assert_true(
+    @moonbit-roaring.RoaringBitmap::deserialize_at(data, data.length() + 100)
+    is Err(_),
+  )
+  // Negative.
+  assert_true(
+    @moonbit-roaring.RoaringBitmap::deserialize_at(data, -1) is Err(_),
+  )
+  // At the separator, which is not a cookie.
+  let (_, after_first) = match
+    @moonbit-roaring.RoaringBitmap::deserialize_at(data, 1) {
+    Ok(pair) => pair
+    Err(_) => {
+      println("prefix read failed")
+      panic()
+    }
+  }
+  assert_true(
+    @moonbit-roaring.RoaringBitmap::deserialize_at(data, after_first) is Err(_),
+  )
+}
+
+///|
+test "deserialize still rejects trailing bytes" {
+  // `deserialize` is the strict wrapper: a bitmap plus anything else is an
+  // error, which is what catches a truncated frame.
+  let data = concatenated_fixtures()
+  assert_true(@moonbit-roaring.RoaringBitmap::deserialize(data) is Err(_))
+  // Exactly one bitmap still works.
+  let exact = @moonbit-roaring.RoaringBitmap::from_array([1U, 2U, 3U]).serialize()
+  let restored = match @moonbit-roaring.RoaringBitmap::deserialize(exact) {
+    Ok(b) => b
+    Err(_) => {
+      println("exact-length buffer was rejected")
+      panic()
+    }
+  }
+  assert_eq(restored.to_array(), [1U, 2U, 3U])
+}
+
+///|
+test "deserialize_at agrees with deserialize on a standalone buffer" {
+  let shapes = [
+    @moonbit-roaring.RoaringBitmap::new(),
+    @moonbit-roaring.RoaringBitmap::from_array([1U]),
+    @moonbit-roaring.RoaringBitmap::from_range(0U, 200U),
+    @moonbit-roaring.RoaringBitmap::from_array(
+      Array::makei(9000, i => (i * 2).reinterpret_as_uint()),
+    ),
+  ]
+  for bm in shapes {
+    let bytes = bm.serialize()
+    let (via_at, end) = match
+      @moonbit-roaring.RoaringBitmap::deserialize_at(bytes, 0) {
+      Ok(pair) => pair
+      Err(_) => {
+        println("deserialize_at rejected a valid buffer")
+        panic()
+      }
+    }
+    assert_eq(end, bytes.length())
+    assert_eq(via_at.serialize(), bytes)
+    assert_true(via_at == bm)
+  }
+}
+
+///|
+test "deserialize_at handles offset headers at a non-zero offset" {
+  // Six containers past the offset-header threshold, each a Run, so both the
+  // run flags and the offset header are present. Reading this at a non-zero
+  // offset exercises the relative-offset comparison that a standalone read
+  // never touches.
+  let values = []
+  for bucket = 0; bucket < 6; bucket = bucket + 1 {
+    let base = bucket * 65536
+    values.push(base.reinterpret_as_uint())
+    values.push((base + 1).reinterpret_as_uint())
+    values.push((base + 2).reinterpret_as_uint())
+  }
+  let bm = @moonbit-roaring.RoaringBitmap::from_array(values)
+  let bytes = bm.serialize()
+  assert_true(bm.get_stats().run_containers == 6)
+
+  let buf = @buffer.Buffer::Buffer()
+  buf.write_byte(0x11)
+  buf.write_byte(0x22)
+  for b in bytes {
+    buf.write_byte(b)
+  }
+  let framed = buf.to_bytes()
+
+  let (read, end) = match
+    @moonbit-roaring.RoaringBitmap::deserialize_at(framed, 2) {
+    Ok(pair) => pair
+    Err(e) => {
+      println("offset-header read failed: \{e}")
+      panic()
+    }
+  }
+  assert_eq(read.to_array(), bm.to_array())
+  assert_eq(read.serialize(), bytes)
+  assert_eq(end, 2 + bytes.length())
+  // Nothing is left after the bitmap, so a further read fails.
+  assert_true(
+    @moonbit-roaring.RoaringBitmap::deserialize_at(framed, end) is Err(_),
+  )
+}
