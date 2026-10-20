@@ -90,7 +90,8 @@ moon run examples/analytics
 - `intersects`：短路判断两个位图是否有交集
 - 半开区间构造、修改和包含判断
 - 闭区间补集 `flip`
-- 惰性 `Iter[UInt]`、bitmap 级 `rank` 和 `select`
+- 惰性 `Iter[UInt]`，并用 `iter_from` 直接定位到某个值，无需解码它之前的桶
+- bitmap 级 `rank` 和 `select`
 - Roaring portable 序列化、严格反序列化，以及不构造编码即可得知线上大小的
   `portable_size_in_bytes`
 - `from_sorted`：导入已有序数据；`run_optimize`：重新编码从其他实现读入的位图

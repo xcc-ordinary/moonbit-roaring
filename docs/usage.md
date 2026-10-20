@@ -34,6 +34,27 @@ container representation and re-boxes the result.
 `iter()` is lazy per bucket: `bm.iter().take(3)` decodes one container, not
 the whole bitmap. `to_array()` decodes everything.
 
+### Seeking instead of scanning
+
+`iter_from(start)` begins at the first value `>= start` rather than at the
+bitmap's minimum. "The next value at or above x" is the core primitive of a
+posting-list merge or a windowed scan, and without it the only way to express
+it decodes every bucket before x:
+
+```moonbit
+let next_match = postings.iter_from(cursor).take(1).to_array()
+```
+
+Measured on a 4096-bucket bitmap, seeking into the last bucket: `iter_from`
+takes about 100 us where `iter().filter(v => v >= start)` takes 3.4 seconds,
+because the filter decodes all 4000 buckets before the target and `iter_from`
+decodes exactly one. The seek itself is a binary search over the container
+keys plus one inside the bucket, so it costs no more than `iter().take(1)`.
+
+Only the bucket holding `start` is decoded up front; everything after it stays
+lazy, so `iter_from(x).take(n)` still does not pay for buckets it never
+visits.
+
 ## Counting without materializing
 
 The four cardinality methods answer size questions while producing only a

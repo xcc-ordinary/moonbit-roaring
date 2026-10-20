@@ -197,3 +197,90 @@ test "rank and select are inverse operations for present elements" {
     assert_eq(bm.select(r.to_int() - 1), Some(v))
   }
 }
+
+// ============ iter_from: seek without decoding the prefix ============
+
+///|
+test "iter_from yields exactly the values at or above the start" {
+  let bm = @moonbit-roaring.RoaringBitmap::from_array([
+    1U, 5U, 10U, 70000U, 70001U, 200000U,
+  ])
+  // Below the minimum, at the minimum, between values, at a value, past the max.
+  assert_eq(bm.iter_from(0U).to_array(), bm.to_array())
+  assert_eq(bm.iter_from(1U).to_array(), bm.to_array())
+  assert_eq(bm.iter_from(2U).to_array(), [5U, 10U, 70000U, 70001U, 200000U])
+  assert_eq(bm.iter_from(5U).to_array(), [5U, 10U, 70000U, 70001U, 200000U])
+  assert_eq(bm.iter_from(6U).to_array(), [10U, 70000U, 70001U, 200000U])
+  assert_eq(bm.iter_from(70000U).to_array(), [70000U, 70001U, 200000U])
+  assert_eq(bm.iter_from(200000U).to_array(), [200000U])
+  assert_true(bm.iter_from(200001U).to_array() == [])
+  assert_true(bm.iter_from(4294967295U).to_array() == [])
+}
+
+///|
+test "iter_from agrees with filtering the full iteration" {
+  let mut seed = 9292
+  for _trial = 0; _trial < 40; _trial = _trial + 1 {
+    seed = batch_lcg(seed)
+    let count = 1 + seed % 150
+    let values = []
+    for _i = 0; _i < count; _i = _i + 1 {
+      seed = batch_lcg(seed)
+      values.push((seed % 400000).reinterpret_as_uint())
+    }
+    let bm = @moonbit-roaring.RoaringBitmap::from_array(values)
+    seed = batch_lcg(seed)
+    let start = (seed % 400000).reinterpret_as_uint()
+    let expected = bm.iter().filter(v => v >= start).to_array()
+    assert_eq(bm.iter_from(start).to_array(), expected)
+    // And lazily, at several take counts, against a manual slice of the
+    // expected array.
+    for n in [1, 3, 10] {
+      let limit = if n < expected.length() { n } else { expected.length() }
+      assert_eq(
+        bm.iter_from(start).take(n).to_array(),
+        expected[0:limit].to_owned(),
+      )
+    }
+  }
+}
+
+///|
+test "iter_from works on an empty bitmap and past its end" {
+  let empty = @moonbit-roaring.RoaringBitmap::new()
+  assert_true(empty.iter_from(0U).to_array() == [])
+  assert_true(empty.iter_from(4294967295U).to_array() == [])
+  let one = @moonbit-roaring.RoaringBitmap::singleton(42U)
+  assert_eq(one.iter_from(42U).to_array(), [42U])
+  assert_true(one.iter_from(43U).to_array() == [])
+  assert_eq(one.iter_from(0U).to_array(), [42U])
+}
+
+///|
+test "iter_from composes with the rest of Iter" {
+  let bm = @moonbit-roaring.RoaringBitmap::from_range(0U, 1000U)
+  assert_eq(bm.iter_from(100U).take(5).to_array(), [
+    100U, 101U, 102U, 103U, 104U,
+  ])
+  assert_eq(bm.iter_from(995U).count(), 5)
+  assert_eq(bm.iter_from(0U).find_first(v => v == 999U), Some(999U))
+  assert_eq(bm.iter_from(500U).find_first(v => v == 100U), None)
+}
+
+///|
+test "iter does not decode anything until the first element is requested" {
+  // The seek in `iter_from` decodes exactly one bucket; `iter` must decode
+  // none. Both are observable through the container decode count, which this
+  // test pins by checking that constructing an iterator is free of the work
+  // that materializing would do — an empty `iter` over a huge bitmap must not
+  // build the whole thing.
+  let huge = @moonbit-roaring.RoaringBitmap::new().add_range(0U, 2147483648U)
+  let it = huge.iter()
+  assert_true(it.size_hint() is Some(_))
+  // Materializing would need 2^31 slots, which no Array can hold; taking a
+  // few elements must not attempt it.
+  assert_eq(huge.iter().take(3).to_array(), [0U, 1U, 2U])
+  assert_eq(huge.iter_from(2147483645U).take(3).to_array(), [
+    2147483645U, 2147483646U, 2147483647U,
+  ])
+}

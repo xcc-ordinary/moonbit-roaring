@@ -99,7 +99,9 @@ bitmap-level cumulative/order analytics respectively.
 - `intersects`, a short-circuiting "do these share anything"
 - half-open range construction, mutation, and containment
 - closed-interval complement (`flip`)
-- lazy `Iter[UInt]`, bitmap-level `rank` and `select`
+- lazy `Iter[UInt]`, with `iter_from` to seek to a value without decoding
+  the buckets before it
+- bitmap-level `rank` and `select`
 - Roaring portable serialization, strict deserialization, and
   `portable_size_in_bytes` for the wire size without building it
 - `from_sorted` for importing already-ordered data, and `run_optimize` for

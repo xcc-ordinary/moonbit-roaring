@@ -45,6 +45,7 @@ pub fn RoaringBitmap::intersects(Self, Self) -> Bool
 pub fn RoaringBitmap::is_empty(Self) -> Bool
 pub fn RoaringBitmap::is_subset(Self, Self) -> Bool
 pub fn RoaringBitmap::iter(Self) -> Iter[UInt32]
+pub fn RoaringBitmap::iter_from(Self, UInt32) -> Iter[UInt32]
 pub fn RoaringBitmap::jaccard_similarity(Self, Self) -> Double
 pub fn RoaringBitmap::max(Self) -> UInt32?
 pub fn RoaringBitmap::min(Self) -> UInt32?

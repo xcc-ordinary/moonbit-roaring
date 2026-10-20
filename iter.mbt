@@ -95,16 +95,34 @@ fn container_select(c : Container, index : Int32) -> UInt16 {
 // ============ public API ============
 
 ///|
-/// An iterator over every element in ascending order. Decodes one bucket's
-/// container at a time rather than materializing the whole bitmap up front
-/// (as `to_array()` does), so `bm.iter().take(n)` or `bm.iter().find_first(f)`
-/// can stop without paying to decode buckets past where iteration stopped.
-pub fn RoaringBitmap::iter(self : RoaringBitmap) -> Iter[UInt32] {
-  let containers = self.containers
-  let mut bucket_idx = 0
-  let mut current : Array[UInt16] = []
-  let mut current_key : UInt16 = (0 : UInt16)
-  let mut pos = 0
+/// First index in an ascending array whose value is >= `value`, or the array
+/// length when there is none.
+fn first_index_at_or_above(arr : Array[UInt16], value : UInt16) -> Int32 {
+  match binary_search_u16(arr, value) {
+    Found(idx) => idx
+    NotFound(pos) => pos
+  }
+}
+
+///|
+/// The lazy walk shared by `iter` and `iter_from`.
+///
+/// `first`/`first_key`/`first_pos` describe an already-decoded bucket to start
+/// from; passing an empty array with `pos = 0` makes the walk begin by decoding
+/// bucket `next_bucket` on the first call, which is what `iter` wants — it
+/// should cost nothing until the first element is actually requested.
+fn walk_containers(
+  containers : Array[HighContainer],
+  first : Array[UInt16],
+  first_key : UInt16,
+  first_pos : Int32,
+  next_bucket : Int32,
+  size : Int64,
+) -> Iter[UInt32] {
+  let mut bucket_idx = next_bucket
+  let mut current = first
+  let mut current_key = first_key
+  let mut pos = first_pos
   Iter::new(
     fn() {
       while pos >= current.length() {
@@ -122,10 +140,68 @@ pub fn RoaringBitmap::iter(self : RoaringBitmap) -> Iter[UInt32] {
       Some(value)
     },
     // `size_hint` is an `Int` and a bitmap can hold more values than that, so
-    // clamp rather than wrap. The hint is advisory: `iter` is lazy and works
-    // on a bitmap of any size until the caller tries to collect it.
-    size_hint=size_as_int(self.size),
+    // clamp rather than wrap. The hint is advisory — and an upper bound for
+    // `iter_from`, which starts partway in.
+    size_hint=size_as_int(size),
   )
+}
+
+///|
+/// An iterator over every element in ascending order. Decodes one bucket's
+/// container at a time rather than materializing the whole bitmap up front
+/// (as `to_array()` does), so `bm.iter().take(n)` or `bm.iter().find_first(f)`
+/// can stop without paying to decode buckets past where iteration stopped.
+pub fn RoaringBitmap::iter(self : RoaringBitmap) -> Iter[UInt32] {
+  walk_containers(self.containers, [], (0 : UInt16), 0, 0, self.size)
+}
+
+///|
+/// An iterator over every element >= `start`, in ascending order.
+///
+/// "The next value at or above x" is the core primitive of a posting-list
+/// merge, a windowed scan, or a skip-list-style probe. Without it the only way
+/// to express the query is `iter().find_first(v >= x)`, which decodes every
+/// bucket before x on the way.
+///
+/// Seeks with a binary search rather than a walk: the bucket holding `start` is
+/// found in O(log containers), and the position inside it in O(log 65536).
+/// Only that one bucket is decoded eagerly — everything after it stays lazy,
+/// so `iter_from(x).take(n)` does not pay for buckets it never visits.
+///
+/// The size hint is an upper bound rather than exact, since iteration begins
+/// partway in.
+pub fn RoaringBitmap::iter_from(
+  self : RoaringBitmap,
+  start : UInt32,
+) -> Iter[UInt32] {
+  let containers = self.containers
+  let start_high = extract_high(start)
+  let start_low = extract_low(start)
+  // The first bucket that can hold a value >= start is the one holding
+  // `start`'s high key, or the next one along when there is no such bucket.
+  let first_bucket = match find_bucket(containers, start_high) {
+    Found(idx) => idx
+    NotFound(pos) => pos
+  }
+  if first_bucket >= containers.length() {
+    // `start` is past every value the bitmap holds.
+    return walk_containers(
+      containers,
+      [],
+      (0 : UInt16),
+      0,
+      containers.length(),
+      self.size,
+    )
+  }
+  let hc = containers[first_bucket]
+  let values = container_to_sorted_array(hc.container)
+  let pos = if hc.key == start_high {
+    first_index_at_or_above(values, start_low)
+  } else {
+    0
+  }
+  walk_containers(containers, values, hc.key, pos, first_bucket + 1, self.size)
 }
 
 ///|

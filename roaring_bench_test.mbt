@@ -145,3 +145,26 @@ test "bench add_many 8000 distinct keys (many buckets)" (it : @bench.T) {
     it.keep(bitmap)
   })
 }
+
+///|
+// `iter_from` seeks with a binary search instead of walking from the start.
+// The comparison that motivates it — `iter().filter(v => v >= x)` — decodes
+// every bucket before x, which on this fixture is 4000 buckets and seconds of
+// work; `iter_from` decodes exactly one. Only the seek is benchmarked here,
+// because the filter version is too slow to run repeatedly.
+
+///|
+test "bench iter_from near the end of a wide bitmap" (it : @bench.T) {
+  let bm = @moonbit-roaring.RoaringBitmap::new().add_range(
+    0U,
+    (4096 * 65536).reinterpret_as_uint(),
+  )
+  it.keep(bm)
+  it.bench(fn() {
+    let found = bm
+      .iter_from((4000 * 65536).reinterpret_as_uint())
+      .take(1)
+      .to_array()
+    it.keep(found)
+  })
+}
