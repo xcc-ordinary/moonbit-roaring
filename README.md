@@ -8,6 +8,9 @@ An interoperability-focused RoaringBitmap implementation for MoonBit. It
 combines automatic Array/Bitmap/Run representation selection with the Roaring
 portable binary format.
 
+Requires MoonBit compiler (`moonc`) v0.10.16 or newer. CI records the installed
+toolchain version and builds, checks, and tests every supported target.
+
 The project complements, rather than replaces,
 [`kesmeey/RoaringBitmap`](https://github.com/kesmeey/RoaringBitmap). That package
 established the core bitmap and set-operation API in MoonBit; this package

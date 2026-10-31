@@ -7,6 +7,9 @@
 一个以互操作为核心的 MoonBit RoaringBitmap 实现：自动在
 Array/Bitmap/Run 三种容器间选择，并实现 Roaring portable 二进制格式。
 
+要求 MoonBit 编译器（`moonc`）版本不低于 v0.10.16。CI 会记录工具链版本，
+并对所有支持的目标执行检查、构建和测试。
+
 本项目是对 [`kesmeey/RoaringBitmap`](https://github.com/kesmeey/RoaringBitmap)
 的扩展与互补，而不是否认或替代。已有项目为 MoonBit 提供了基础位图与集合运算；
 本项目重点补齐 portable 格式互操作、常规变更路径中的自动 Run 压缩、严格解码和

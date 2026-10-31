@@ -29,6 +29,7 @@ jobs:
       - name: Check and test
         run: |
           moon check -d --target ${{ matrix.target }}
+          moon build -d --target ${{ matrix.target }}
           moon test --target ${{ matrix.target }}
 
   fixtures:
