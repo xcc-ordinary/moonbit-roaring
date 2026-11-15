@@ -71,9 +71,10 @@ pub fn RoaringBitmap::xor(Self, Self) -> Self
 pub fn RoaringBitmap::xor_cardinality(Self, Self) -> Int64
 pub impl Eq for RoaringBitmap
 
+#derive(Eq, @debug.Debug)
 pub enum RoaringError {
   DeserializationError(String)
-} derive(Eq, @debug.Debug)
+}
 pub fn RoaringError::equal(Self, Self) -> Bool
 pub fn RoaringError::not_equal(Self, Self) -> Bool
 pub fn RoaringError::output(Self, &Logger) -> Unit
@@ -81,6 +82,7 @@ pub fn RoaringError::to_repr(Self) -> @debug.Repr
 pub fn RoaringError::to_string(Self) -> String
 pub impl Show for RoaringError
 
+#derive(@debug.Debug)
 pub struct RoaringStats {
   total_containers : Int32
   array_containers : Int32
@@ -88,13 +90,14 @@ pub struct RoaringStats {
   run_containers : Int32
   total_bytes_used : Int32
   compression_ratio : Double
-} derive(@debug.Debug)
+}
 pub fn RoaringStats::to_repr(Self) -> @debug.Repr
 
+#derive(Eq, @debug.Debug)
 pub struct Run {
   start : UInt16
   length : UInt16
-} derive(Eq, @debug.Debug)
+}
 pub fn Run::equal(Self, Self) -> Bool
 pub fn Run::not_equal(Self, Self) -> Bool
 pub fn Run::to_repr(Self) -> @debug.Repr

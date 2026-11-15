@@ -23,10 +23,11 @@ priv enum Container {
 
 ///|
 /// A run represents a consecutive range [start, start+length]
+#derive(Eq, Debug)
 pub struct Run {
   start : UInt16
   length : UInt16 // stored as (count - 1) to match official format
-} derive(Eq, Debug)
+}
 
 ///|
 /// `derive` promotes trait methods onto the type; declaring them here makes
@@ -66,9 +67,10 @@ pub extend RoaringBitmap with Eq::{equal, not_equal}
 
 ///|
 /// Error types
+#derive(Eq, Debug)
 pub enum RoaringError {
   DeserializationError(String)
-} derive(Eq, Debug)
+}
 
 ///|
 pub extend RoaringError with Eq::{equal, not_equal}
@@ -96,6 +98,7 @@ priv enum SearchResult {
 
 ///|
 /// Statistics for debugging and optimization verification
+#derive(Debug)
 pub struct RoaringStats {
   total_containers : Int32
   array_containers : Int32
@@ -108,7 +111,7 @@ pub struct RoaringStats {
   // not as "how much was saved". It also excludes the format headers, so it
   // cannot be compared against the real wire size.
   compression_ratio : Double
-} derive(Debug)
+}
 
 ///|
 pub extend RoaringStats with Debug::{to_repr}
