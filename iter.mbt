@@ -105,39 +105,184 @@ fn first_index_at_or_above(arr : Array[UInt16], value : UInt16) -> Int32 {
 }
 
 ///|
+/// A lazy cursor over one bucket's combined 32-bit values, in ascending order.
+///
+/// The walk used to decode each bucket with `container_to_sorted_array` before
+/// yielding anything, so a Bitmap or Run bucket materialized up to 65536
+/// elements even for `iter_from(x).take(1)`. The cursor keeps a
+/// per-representation position and produces one value at a time: an index into
+/// the Array, Kernighan bit extraction within the current Bitmap word, or a
+/// countdown within the current Run. No intermediate array is built, and the
+/// combined value comes back in a single Option that the walk reuses as-is, so
+/// full iteration stays close to the old decode-then-index walk while seeks
+/// stay lazy. A struct method keeps the per-element call direct (no indirect
+/// closure dispatch).
+priv struct LazyCursor {
+  key : UInt16
+  container : Container
+  mut arr_pos : Int32
+  mut word_idx : Int32
+  mut word_rest : UInt64
+  mut run_idx : Int32
+  mut run_next : Int32
+  mut run_remaining : Int32
+}
+
+///|
+fn LazyCursor::new(key : UInt16, container : Container) -> LazyCursor {
+  LazyCursor::{
+    key,
+    container,
+    arr_pos: 0,
+    word_idx: 0,
+    word_rest: 0UL,
+    run_idx: 0,
+    run_next: 0,
+    run_remaining: 0,
+  }
+}
+
+///|
+/// Next combined value, or None once the bucket is exhausted.
+fn LazyCursor::next(self : LazyCursor) -> UInt32? {
+  match self.container {
+    Array(arr) =>
+      if self.arr_pos >= arr.length() {
+        None
+      } else {
+        let v = arr[self.arr_pos]
+        self.arr_pos = self.arr_pos + 1
+        Some(combine(self.key, v))
+      }
+    Bitmap(words) => {
+      if self.word_rest == 0UL {
+        // Skip empty words; each word is visited once across the whole drain.
+        while self.word_idx < words.length() && words[self.word_idx] == 0UL {
+          self.word_idx = self.word_idx + 1
+        }
+        if self.word_idx >= words.length() {
+          return None
+        }
+        self.word_rest = words[self.word_idx]
+      }
+      let bit = lowest_set_bit(self.word_rest)
+      let v = (self.word_idx * 64 + bit).to_uint16()
+      self.word_rest = self.word_rest & (self.word_rest - 1UL)
+      if self.word_rest == 0UL {
+        self.word_idx = self.word_idx + 1
+      }
+      Some(combine(self.key, v))
+    }
+    Run(runs) => {
+      // The current run is cached as a next-value + countdown, so the hot loop
+      // does not touch the runs array per element.
+      if self.run_remaining == 0 {
+        if self.run_idx >= runs.length() {
+          return None
+        }
+        let r = runs[self.run_idx]
+        self.run_next = r.start.to_int()
+        self.run_remaining = r.length.to_int() + 1
+        self.run_idx = self.run_idx + 1
+      }
+      let v = self.run_next.to_uint16()
+      self.run_next = self.run_next + 1
+      self.run_remaining = self.run_remaining - 1
+      Some(combine(self.key, v))
+    }
+  }
+}
+
+///|
+/// Position the cursor at the first low value >= `low`, without decoding the
+/// container: a binary search for Array, a masked word for Bitmap, a binary
+/// search over run ends for Run.
+fn LazyCursor::seek(self : LazyCursor, low : UInt16) -> Unit {
+  match self.container {
+    Array(arr) => self.arr_pos = first_index_at_or_above(arr, low)
+    Bitmap(words) => {
+      let v = low.to_int()
+      let wi = v / 64
+      self.word_idx = wi
+      // Clear the bits below `low` inside its word; next() skips ahead when
+      // the masked word is empty.
+      self.word_rest = words[wi] & (0xFFFFFFFFFFFFFFFFUL << (v % 64))
+      if self.word_rest == 0UL {
+        self.word_idx = wi + 1
+      }
+    }
+    Run(runs) => {
+      let v = low.to_int()
+      // Run ends ascend too (runs are sorted and disjoint), so binary search
+      // for the first run whose end reaches `low`.
+      let mut lo_i = 0
+      let mut hi_i = runs.length()
+      while lo_i < hi_i {
+        let mid = (lo_i + hi_i) / 2
+        let r = runs[mid]
+        if r.start.to_int() + r.length.to_int() < v {
+          lo_i = mid + 1
+        } else {
+          hi_i = mid
+        }
+      }
+      // When the seek is past every run, lo_i == runs.length(): leave the
+      // cursor exhausted instead of letting next() reload run 0.
+      self.run_idx = lo_i
+      self.run_remaining = 0
+      if lo_i < runs.length() {
+        let r = runs[lo_i]
+        let s = r.start.to_int()
+        self.run_next = if s >= v { s } else { v }
+        self.run_remaining = s + r.length.to_int() - self.run_next + 1
+        self.run_idx = lo_i + 1
+      }
+    }
+  }
+}
+
+///|
 /// The lazy walk shared by `iter` and `iter_from`.
 ///
-/// `first`/`first_key`/`first_pos` describe an already-decoded bucket to start
-/// from; passing an empty array with `pos = 0` makes the walk begin by decoding
-/// bucket `next_bucket` on the first call, which is what `iter` wants — it
-/// should cost nothing until the first element is actually requested.
+/// `first` is an already-positioned generator for the first bucket, or None to
+/// begin by opening bucket `next_bucket` on the first call — which is what
+/// `iter` wants: it costs nothing until the first element is actually
+/// requested, and each bucket is opened only when the walk reaches it, one
+/// value at a time.
 fn walk_containers(
   containers : Array[HighContainer],
-  first : Array[UInt16],
-  first_key : UInt16,
-  first_pos : Int32,
+  first : LazyCursor?,
   next_bucket : Int32,
   size : Int64,
 ) -> Iter[UInt32] {
   let mut bucket_idx = next_bucket
   let mut current = first
-  let mut current_key = first_key
-  let mut pos = first_pos
   Iter(
     fn() {
-      while pos >= current.length() {
-        if bucket_idx >= containers.length() {
-          return None
+      let mut result : UInt32? = None
+      let mut done = false
+      while !done {
+        match current {
+          Some(cursor) => {
+            // Reuse the cursor's Option as-is: wrapping it again would
+            // allocate a second box per element.
+            result = cursor.next()
+            match result {
+              Some(_) => done = true
+              None => current = None
+            }
+          }
+          None =>
+            if bucket_idx >= containers.length() {
+              done = true
+            } else {
+              let hc = containers[bucket_idx]
+              current = Some(LazyCursor::new(hc.key, hc.container))
+              bucket_idx = bucket_idx + 1
+            }
         }
-        let hc = containers[bucket_idx]
-        current = container_to_sorted_array(hc.container)
-        current_key = hc.key
-        pos = 0
-        bucket_idx = bucket_idx + 1
       }
-      let value = combine(current_key, current[pos])
-      pos = pos + 1
-      Some(value)
+      result
     },
     // `size_hint` is an `Int` and a bitmap can hold more values than that, so
     // clamp rather than wrap. The hint is advisory — and an upper bound for
@@ -147,12 +292,12 @@ fn walk_containers(
 }
 
 ///|
-/// An iterator over every element in ascending order. Decodes one bucket's
-/// container at a time rather than materializing the whole bitmap up front
-/// (as `to_array()` does), so `bm.iter().take(n)` or `bm.iter().find_first(f)`
-/// can stop without paying to decode buckets past where iteration stopped.
+/// An iterator over every element in ascending order. Opens one bucket at a
+/// time and yields its values lazily (no bucket is materialized as an array),
+/// so `bm.iter().take(n)` or `bm.iter().find_first(f)` can stop without paying
+/// for buckets — or bucket elements — past where iteration stopped.
 pub fn RoaringBitmap::iter(self : RoaringBitmap) -> Iter[UInt32] {
-  walk_containers(self.containers, [], (0 : UInt16), 0, 0, self.size)
+  walk_containers(self.containers, None, 0, self.size)
 }
 
 ///|
@@ -163,10 +308,11 @@ pub fn RoaringBitmap::iter(self : RoaringBitmap) -> Iter[UInt32] {
 /// to express the query is `iter().find_first(v >= x)`, which decodes every
 /// bucket before x on the way.
 ///
-/// Seeks with a binary search rather than a walk: the bucket holding `start` is
-/// found in O(log containers), and the position inside it in O(log 65536).
-/// Only that one bucket is decoded eagerly — everything after it stays lazy,
-/// so `iter_from(x).take(n)` does not pay for buckets it never visits.
+/// Seeks with a binary search rather than a walk: the bucket holding `start`
+/// is found in O(log containers), and the position inside it is set without
+/// decoding — an index for Array, a masked word for Bitmap, a run offset for
+/// Run. Everything stays lazy, so `iter_from(x).take(n)` pays only for the
+/// seek and the n values, never for a whole bucket.
 ///
 /// The size hint is an upper bound rather than exact, since iteration begins
 /// partway in.
@@ -185,23 +331,14 @@ pub fn RoaringBitmap::iter_from(
   }
   if first_bucket >= containers.length() {
     // `start` is past every value the bitmap holds.
-    return walk_containers(
-      containers,
-      [],
-      (0 : UInt16),
-      0,
-      containers.length(),
-      self.size,
-    )
+    return walk_containers(containers, None, containers.length(), self.size)
   }
   let hc = containers[first_bucket]
-  let values = container_to_sorted_array(hc.container)
-  let pos = if hc.key == start_high {
-    first_index_at_or_above(values, start_low)
-  } else {
-    0
+  let cursor = LazyCursor::new(hc.key, hc.container)
+  if hc.key == start_high {
+    cursor.seek(start_low)
   }
-  walk_containers(containers, values, hc.key, pos, first_bucket + 1, self.size)
+  walk_containers(containers, Some(cursor), first_bucket + 1, self.size)
 }
 
 ///|

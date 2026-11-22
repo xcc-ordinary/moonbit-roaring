@@ -293,11 +293,10 @@ test "iter_from composes with the rest of Iter" {
 
 ///|
 test "iter does not decode anything until the first element is requested" {
-  // The seek in `iter_from` decodes exactly one bucket; `iter` must decode
-  // none. Both are observable through the container decode count, which this
-  // test pins by checking that constructing an iterator is free of the work
-  // that materializing would do — an empty `iter` over a huge bitmap must not
-  // build the whole thing.
+  // Neither `iter` nor the seek in `iter_from` decodes a bucket: both open a
+  // lazy cursor. Constructing an iterator is free of the work materializing
+  // would do — an empty `iter` over a huge bitmap must not build the whole
+  // thing, and a seek must not expand the bucket it lands in.
   let huge = @moonbit-roaring.RoaringBitmap::new().add_range(0U, 2147483648U)
   let it = huge.iter()
   assert_true(it.size_hint() is Some(_))
@@ -307,4 +306,33 @@ test "iter does not decode anything until the first element is requested" {
   assert_eq(huge.iter_from(2147483645U).take(3).to_array(), [
     2147483645U, 2147483646U, 2147483647U,
   ])
+}
+
+///|
+test "iter_from seeks inside a Bitmap word without decoding the bucket" {
+  // 9000 even values in one bucket: a Bitmap container. An odd seek must land
+  // on the next even value via the masked-word path.
+  let bm = @moonbit-roaring.RoaringBitmap::from_array(
+    Array::makei(9000, i => (i * 2).reinterpret_as_uint()),
+  )
+  assert_eq(bm.iter_from(4001U).take(3).to_array(), [4002U, 4004U, 4006U])
+  assert_eq(bm.iter_from(17996U).take(2).to_array(), [17996U, 17998U])
+  // Past the last value inside the populated words: the masked word is empty
+  // and every later word is zero, so the cursor must drain to nothing.
+  assert_true(bm.iter_from(17999U).to_array() == [])
+  assert_true(bm.iter_from(20000U).to_array() == [])
+}
+
+///|
+test "iter_from seeks into a Run gap and across run boundaries" {
+  // Two runs in one bucket with a gap between them.
+  let bm = @moonbit-roaring.RoaringBitmap::from_range(0U, 1000U).union(
+    @moonbit-roaring.RoaringBitmap::from_range(5000U, 6000U),
+  )
+  // A seek into the gap lands on the next run's start.
+  assert_eq(bm.iter_from(2000U).take(3).to_array(), [5000U, 5001U, 5002U])
+  // A seek at the last value of the first run crosses into the second run.
+  assert_eq(bm.iter_from(999U).take(2).to_array(), [999U, 5000U])
+  // A seek past the final run drains to nothing.
+  assert_true(bm.iter_from(6000U).to_array() == [])
 }

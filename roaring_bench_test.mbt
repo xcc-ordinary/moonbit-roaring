@@ -273,3 +273,23 @@ test "bench deserialize many bitmap containers" (it : @bench.T) {
     it.keep(bm)
   })
 }
+
+///|
+// Full-drain throughput of the lazy streaming iterator. The per-value cursor
+// never materializes a bucket — which is what makes iter_from seeks and narrow
+// range windows ~100x faster — at the cost of some full-drain throughput versus
+// the old eager decode-per-bucket walk. `to_array()` remains the eager bulk
+// path (unchanged) for when every value is wanted at once.
+
+///|
+test "bench iter full mixed containers" (it : @bench.T) {
+  let bitmap = mixed_fixture(0U)
+  it.keep(bitmap)
+  it.bench(fn() {
+    let mut count = 0
+    for _ in bitmap.iter() {
+      count = count + 1
+    }
+    it.keep(count)
+  })
+}
