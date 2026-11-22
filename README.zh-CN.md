@@ -117,6 +117,11 @@ moon run cmd/main -- encode --start 0 --end 200000
 moon run cmd/main -- check 3a30000001000000000002001000000001006400e803
 # ok: 3 values in 22 bytes, byte-for-byte round trip
 
+moon run cmd/main -- values 3a30000001000000000002001000000001006400e803
+# 1
+# 100
+# 1000
+
 moon run cmd/main -- info 3a30000001000000000002001000000001006400e803
 # values          3
 # min / max       1 / 1000
@@ -126,13 +131,14 @@ moon run cmd/main -- info 3a30000001000000000002001000000001006400e803
 ```
 
 `check` 还会交叉校验位图自身的查询方法，因此既能发现格式漂移，也能发现内部不一致。
+`values` 逐行输出解码后的全部值，供其他程序逐元素比对集合，而不是只读一份摘要。
 完整说明见 [`docs/usage.md`](docs/usage.md)。
 
 ## 可复现证据
 
-- 2026-11-15 兼容性复核使用 `moon 0.1.20261104`、`moonc
+- 2026-11-22 兼容性复核使用 `moon 0.1.20261104`、`moonc
   v0.10.20+65efd5b93` 和 `moonrun 0.1.20261104`（`moon version --all`）。
-  `wasm`、`wasm-gc`、`js` 均通过检查、构建和全部 212 项测试；三个可运行示例均成功。
+  `wasm`、`wasm-gc`、`js` 均通过检查、构建和全部 216 项测试；三个可运行示例均成功。
 - CI 在 `wasm`、`wasm-gc`、`js` 三个目标运行检查和测试。
 - 直接读取 `RoaringFormatSpec/testdata` 中由官方 Java 实现生成的文件，验证已知值，
   再逐字节重新编码。
@@ -140,6 +146,11 @@ moon run cmd/main -- info 3a30000001000000000002001000000001006400e803
   的 WASM 包，并非官方项目；CI 验证结果可重复。其中 4 类正好落在容器选择的
   成本边界上（2、3、4 个连续值，以及散点中夹一个二元组），因此成本模型是
   对照参考实现校验，而不是只对照自己。
+- 现场跨进程互操作：在 `tools/crossref-fixtures` 执行 `npm run crosscheck`，
+  两个独立操作系统进程——`roaring-wasm`（CRoaring）与新启动的
+  `moon run cmd/main`——双向交换刚刚生成的 portable 字节。19 个用例逐元素
+  比对集合内容并验证逐字节重编码，覆盖空集、稀疏、稠密、Run、混合容器、
+  offset 头、容器选择平局边界和 32 位值空间顶端。CI 每次推送都会执行。
 - 错误输入测试覆盖结构和语义校验，包括代表性数据的每一个截断前缀。
 - release 模式基准和复现方法见 [`docs/benchmarks.md`](docs/benchmarks.md)；这些数据
   只作为本项目基线，不用于宣称优于其他实现。
@@ -212,5 +223,5 @@ let n32 : Int = bitmap.size().to_int() // 仅在确定放得下时使用
 
 Apache-2.0。
 
-本项目正在准备 2026 年 9 月 MoonBit Hackathon 复审，补充材料与可粘贴文案见
+本项目面向 MoonBit Hackathon 申报开发，补充材料与可粘贴文案见
 [`docs/competition/resubmission-strategy.zh-CN.md`](docs/competition/resubmission-strategy.zh-CN.md)。

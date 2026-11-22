@@ -4,7 +4,8 @@ Practical guide to the parts of the API that are easy to get wrong, plus the
 command-line tool. The [README](../README.md) covers what the package is and
 why it exists; this page covers how to drive it.
 
-Everything here was run against the checked-in code on `moon 0.1.20260920`.
+Everything here was run against the checked-in code on `moon 0.1.20261104`
+(`moonc v0.10.20`).
 
 ## Table of contents
 
@@ -241,6 +242,33 @@ wrapper that rejects a buffer holding anything other than exactly one bitmap.
 The two are separate functions rather than a mode flag, for the same reason the
 package has no boolean serialization mode.
 
+### Live cross-process verification
+
+The checked-in fixtures prove compatibility with bytes generated in the past.
+To prove it against bytes generated *right now*, the repository ships a
+bidirectional cross-process check:
+
+```bash
+cd tools/crossref-fixtures
+npm install
+npm run crosscheck
+```
+
+Two separate OS processes exchange portable bytes as hex, sharing no code:
+
+- **CRoaring → MoonBit**: `roaring-wasm` (CRoaring compiled to WASM) builds
+  and serializes each case; a fresh `moon run cmd/main` process decodes it,
+  lists every value with `values`, and verifies the byte-for-byte round trip
+  with `check`.
+- **MoonBit → CRoaring**: `moon run cmd/main -- encode` builds and serializes
+  each case; `roaring-wasm` deserializes the bytes, compares the recovered set
+  element by element, and re-encodes to confirm the bytes are identical.
+
+The cases cover empty, sparse, dense, run and mixed-container bitmaps, the
+offset header, the container-selection tie-breaks, and the top of the 32-bit
+value space. CI runs this on every push, so the evidence stays current rather
+than being a one-off recording.
+
 ## The `roaring` command-line tool
 
 `cmd/main` drives the portable format from a shell. Bytes travel as hex, so
@@ -294,6 +322,25 @@ ok: 3 values in 22 bytes, byte-for-byte round trip
 Beyond the byte comparison, `check` asserts `rank(max) == size` and
 `select(0) == min`, so a bitmap that encodes correctly but queries
 inconsistently is still reported.
+
+### `values <hex>`
+
+Decode portable bytes and print every value, one decimal per line, in
+ascending order. An empty bitmap prints nothing.
+
+```bash
+$ moon run cmd/main -- values 3a30000001000000000002001000000001006400e803
+1
+100
+1000
+```
+
+This is the machine-readable counterpart of `info`: where `info` gives a
+summary a human reads, `values` gives a complete listing another program can
+compare against its own set element by element. Values stream straight from
+the lazy iterator, so no intermediate array is built. It is what the live
+cross-process check below uses to verify semantic agreement, not just byte
+agreement.
 
 ### Error handling
 

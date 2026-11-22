@@ -119,7 +119,7 @@ Roaring 的价值不仅是压缩算法，还在于统一的 portable 数据格�
 
 原阻断项已在 2026-09-18 全部落地：Mooncakes `0.1.0` 发布与全新项目安装验证、GitHub Release、真实 CI、官方 testdata、严格错误输入校验、兼容 API、可复现 benchmark，以及 `Interoperability-focused` 的克制定位。
 
-仍可继续增强但不阻断复审：启动 CRoaring/Java/Go 独立进程读取 MoonBit 新生成文件，形成除官方 Java fixture 双向逐字节往返之外的第二套跨进程证据。
+2026-11-22 更新：原"仍可继续增强"项中的第二套跨进程证据已落地。`tools/crossref-fixtures/crosscheck.mjs`（`npm run crosscheck`）在两个独立操作系统进程之间现场交换新生成的 portable 字节：方向 A 由 roaring-wasm（基于 CRoaring 的第三方 WASM 封装）构建并序列化，新启动的 `moon run cmd/main` 进程用新增的 `values` 子命令逐值比对集合内容，并用 `check` 验证逐字节往返；方向 B 由 MoonBit `encode` 现场生成字节，roaring-wasm 反序列化后逐值比对并重新编码确认字节一致。共 19 个用例（11 解码 + 8 编码），覆盖空集、稀疏、稠密、Run、混合容器、offset 头、容器选择平局边界和 32 位值空间顶端，已接入 CI fixtures job 持续执行。措辞注意：交换介质是 hex 参数与标准输出（跨进程管道），不是文件中转；参考实现仍是第三方 CRoaring WASM 封装，官方 Java/Go 实现的独立进程验证仍可作为后续增强。
 
 ## 9 月 17 日至 24 日执行顺序
 

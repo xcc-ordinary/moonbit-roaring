@@ -128,6 +128,11 @@ moon run cmd/main -- encode --start 0 --end 200000
 moon run cmd/main -- check 3a30000001000000000002001000000001006400e803
 # ok: 3 values in 22 bytes, byte-for-byte round trip
 
+moon run cmd/main -- values 3a30000001000000000002001000000001006400e803
+# 1
+# 100
+# 1000
+
 moon run cmd/main -- info 3a30000001000000000002001000000001006400e803
 # values          3
 # min / max       1 / 1000
@@ -137,14 +142,16 @@ moon run cmd/main -- info 3a30000001000000000002001000000001006400e803
 ```
 
 `check` also cross-checks the bitmap's own query methods, so it reports
-internal disagreement as well as format drift. See
+internal disagreement as well as format drift. `values` prints every decoded
+value, one per line, so another program can compare sets element by element
+rather than trusting a summary. See
 [`docs/usage.md`](docs/usage.md) for the full reference.
 
 ## Verification evidence
 
-- Compatibility check on 2026-11-15: `moon 0.1.20261104`, `moonc
+- Compatibility check on 2026-11-22: `moon 0.1.20261104`, `moonc
   v0.10.20+65efd5b93`, and `moonrun 0.1.20261104` (`moon version --all`).
-  The `wasm`, `wasm-gc`, and `js` targets each passed check, build, and all 212
+  The `wasm`, `wasm-gc`, and `js` targets each passed check, build, and all 216
   tests; all three runnable examples completed successfully.
 - Tests run on `wasm`, `wasm-gc`, and `js` in CI.
 - Official Java-generated files from `RoaringFormatSpec/testdata` are decoded,
@@ -155,6 +162,13 @@ internal disagreement as well as format drift. See
   (two, three and four consecutive values, and a single pair among scattered
   data), so the cost model is checked against the reference implementation
   rather than only against itself.
+- Live cross-process interoperability: `npm run crosscheck` in
+  `tools/crossref-fixtures` exchanges freshly generated portable bytes between
+  two separate OS processes — `roaring-wasm` (CRoaring) and a fresh
+  `moon run cmd/main` — in both directions. 19 cases verify element-by-element
+  set agreement and byte-for-byte re-encoding, covering empty, sparse, dense,
+  run and mixed shapes, the offset header, the container-selection tie-breaks
+  and the top of the 32-bit value space. CI runs it on every push.
 - Malformed-format tests cover structural and semantic validation, including
   every truncated prefix of representative serialized data.
 - Release-mode benchmark fixtures and a reproducible baseline are documented in
@@ -233,6 +247,6 @@ works unchanged.
 
 Apache-2.0.
 
-This project is being prepared for the September 2026 MoonBit Hackathon. The
-resubmission evidence is tracked in
+This project is developed for the MoonBit Hackathon. The resubmission
+evidence is tracked in
 [`docs/competition/resubmission-strategy.zh-CN.md`](docs/competition/resubmission-strategy.zh-CN.md).
