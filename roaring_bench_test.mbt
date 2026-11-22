@@ -147,6 +147,22 @@ test "bench add_many 8000 distinct keys (many buckets)" (it : @bench.T) {
 }
 
 ///|
+// `flip` assembles its result in one merge walk, like add_range/remove_range.
+// It used to rebuild the container list per bucket AND materialize every
+// absent full bucket as a 65536-element array, which made a wide flip
+// quadratic in the buckets touched. 2048 buckets should stay millisecond-
+// scale; if this starts climbing quadratically, the walk has regressed.
+
+///|
+test "bench flip wide range (2048 buckets)" (it : @bench.T) {
+  let empty = @moonbit-roaring.RoaringBitmap::new()
+  it.bench(fn() {
+    let flipped = empty.flip(0U, (2048 * 65536 - 1).reinterpret_as_uint())
+    it.keep(flipped)
+  })
+}
+
+///|
 // `iter_from` seeks with a binary search instead of walking from the start.
 // The comparison that motivates it — `iter().filter(v => v >= x)` — decodes
 // every bucket before x, which on this fixture is 4000 buckets and seconds of

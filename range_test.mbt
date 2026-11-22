@@ -370,6 +370,47 @@ test "flip of a single value toggles exactly that value" {
   assert_eq(absent.flip(7U, 7U).to_array(), [7U, 8U])
 }
 
+///|
+test "flip keeps every run that sits past the interval" {
+  // Three separate runs in one bucket (10..20, 100..110, 200..210): run cost
+  // 2 + 4*3 = 14 bytes beats the 66-byte array, so this is a Run container.
+  // The flip interval sits between the first and second run, so BOTH later
+  // runs must survive — an early exit that keeps only the first run past the
+  // interval silently drops the rest.
+  let values = []
+  for base in [10, 100, 200] {
+    for i = 0; i <= 10; i = i + 1 {
+      values.push((base + i).reinterpret_as_uint())
+    }
+  }
+  let bm = @moonbit-roaring.RoaringBitmap::from_array(values)
+  assert_eq(bm.get_stats().run_containers, 1)
+  let flipped = bm.flip(50U, 60U)
+  let expected = []
+  for base in [10, 50, 100, 200] {
+    for i = 0; i <= 10; i = i + 1 {
+      expected.push((base + i).reinterpret_as_uint())
+    }
+  }
+  assert_eq(flipped.to_array(), expected)
+}
+
+///|
+test "flip keeps a run container that lies entirely past the interval" {
+  let values = []
+  for base in [100, 200] {
+    for i = 0; i <= 10; i = i + 1 {
+      values.push((base + i).reinterpret_as_uint())
+    }
+  }
+  let bm = @moonbit-roaring.RoaringBitmap::from_array(values)
+  assert_eq(bm.get_stats().run_containers, 1)
+  let flipped = bm.flip(50U, 60U)
+  assert_eq(flipped.size(), 22 + 11)
+  assert_true(flipped.contains(210U))
+  assert_flip_matches_xor(bm, 50U, 60U)
+}
+
 // ============ add_range / remove_range as a single merge walk ============
 //
 // Both operations assemble the result container list in one pass, so they are
@@ -550,6 +591,53 @@ test "flip equals xor with the interval at bucket boundaries" {
       assert_flip_matches_xor(bm, lo, hi)
     }
   }
+}
+
+///|
+test "flip over the whole 32-bit space fills an empty bitmap" {
+  // 65536 absent buckets, each covered completely: every one must become a
+  // single Run in the same walk. A per-bucket rebuild of the container list
+  // (or materializing each bucket as a 65536-element array) makes this test
+  // take minutes instead of milliseconds.
+  let all = @moonbit-roaring.RoaringBitmap::new().flip(0U, 4294967295U)
+  assert_eq(all.size(), 4294967296L)
+  let stats = all.get_stats()
+  assert_eq(stats.total_containers, 65536)
+  assert_eq(stats.run_containers, 65536)
+  assert_eq(all.min(), Some(0U))
+  assert_eq(all.max(), Some(4294967295U))
+  assert_true(all.contains(2147483648U))
+  // Flipping the whole space again empties it.
+  assert_true(all.flip(0U, 4294967295U).is_empty())
+}
+
+///|
+test "flip over the whole 32-bit space complements a sparse bitmap" {
+  let bm = @moonbit-roaring.RoaringBitmap::from_array([5U, 100000U, 4294967290U])
+  let flipped = bm.flip(0U, 4294967295U)
+  assert_eq(flipped.size(), 4294967296L - 3L)
+  assert_false(flipped.contains(5U))
+  assert_false(flipped.contains(100000U))
+  assert_false(flipped.contains(4294967290U))
+  assert_true(flipped.contains(4U))
+  assert_true(flipped.contains(6U))
+  assert_true(flipped.contains(4294967295U))
+  assert_eq(flipped.flip(0U, 4294967295U).to_array(), bm.to_array())
+}
+
+///|
+test "flip over a wide interval with partial edge buckets" {
+  // Buckets 1 and 65535 are only partially covered; the 65533 between them
+  // are absent and fully covered. Each ends up a single Run.
+  let flipped = @moonbit-roaring.RoaringBitmap::new().flip(100000U, 4294967290U)
+  assert_eq(flipped.size(), 4294867291L)
+  assert_eq(flipped.min(), Some(100000U))
+  assert_eq(flipped.max(), Some(4294967290U))
+  assert_false(flipped.contains(99999U))
+  assert_false(flipped.contains(4294967291U))
+  let stats = flipped.get_stats()
+  assert_eq(stats.total_containers, 65535)
+  assert_eq(stats.run_containers, 65535)
 }
 
 ///|

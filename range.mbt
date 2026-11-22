@@ -444,8 +444,13 @@ fn bitmap_gaps_in_range(
 }
 
 ///|
-/// Values held by the runs OUTSIDE the local inclusive range [lo, hi]. Runs
-/// are sorted, so this stops as soon as it passes the range.
+/// Values held by the runs OUTSIDE the local inclusive range [lo, hi]. A run
+/// wholly past either bound survives in full; a run straddling a bound
+/// contributes only its outside part. Cost is O(runs + values emitted).
+///
+/// There is deliberately no early exit once a run starts past `hi`: every
+/// later run is also a kept value and still has to be emitted. An earlier
+/// version stopped after the first such run and silently dropped the rest.
 fn run_values_outside_range(
   runs : Array[Run],
   lo : Int32,
@@ -454,16 +459,8 @@ fn run_values_outside_range(
   let result = []
   for r in runs {
     let start = r.start.to_int()
-    if start > hi {
-      // Everything from here on is past the range.
-      let end = start + r.length.to_int()
-      for v = start; v <= end; v = v + 1 {
-        result.push(v.to_uint16())
-      }
-      break
-    }
     let end = start + r.length.to_int()
-    if end < lo {
+    if end < lo || start > hi {
       for v = start; v <= end; v = v + 1 {
         result.push(v.to_uint16())
       }
@@ -577,65 +574,12 @@ fn container_flip_range(c : Container, lo : Int32, hi : Int32) -> Container? {
 }
 
 ///|
-fn flip_range_in_bucket(
-  containers : Array[HighContainer],
-  key : UInt16,
-  lo : Int32,
-  hi : Int32,
-) -> Array[HighContainer] {
-  match find_bucket(containers, key) {
-    NotFound(pos) => {
-      // Nothing stored for this key yet, so the complement is simply the
-      // whole interval.
-      let new_container = optimize_container(range_to_array(lo, hi))
-      let new_bucket = HighContainer::{
-        key,
-        container: new_container,
-        cardinality: container_cardinality(new_container),
-      }
-      let new_containers = []
-      for i = 0; i < pos; i = i + 1 {
-        new_containers.push(containers[i])
-      }
-      new_containers.push(new_bucket)
-      for i = pos; i < containers.length(); i = i + 1 {
-        new_containers.push(containers[i])
-      }
-      new_containers
-    }
-    Found(idx) =>
-      match container_flip_range(containers[idx].container, lo, hi) {
-        None => {
-          let result = []
-          for i = 0; i < containers.length(); i = i + 1 {
-            if i != idx {
-              result.push(containers[i])
-            }
-          }
-          result
-        }
-        Some(new_container) => {
-          let new_bucket = HighContainer::{
-            key,
-            container: new_container,
-            cardinality: container_cardinality(new_container),
-          }
-          let new_containers = containers.copy()
-          new_containers[idx] = new_bucket
-          new_containers
-        }
-      }
-  }
-}
-
-///|
 /// Complement within the closed interval `[start, end]` — both bounds
 /// inclusive, matching CRoaring's `roaring_bitmap_flip(ra, start, end)`.
 ///
 /// Values present inside the interval are dropped, values absent from it are
-/// added, and values outside the interval never appear in the result. In
-/// other words the result is `[start, end] \ self`, restricted to `[start,
-/// end]`.
+/// added, and values outside the interval are carried over untouched: the
+/// result is the symmetric difference of `self` with the interval.
 ///
 /// An inverted interval (`start > end`) is a no-op and returns the receiver
 /// unchanged, matching CRoaring and this package's own `add_range` /
@@ -647,6 +591,13 @@ fn flip_range_in_bucket(
 /// intervals: `flip` is closed because that is what the reference
 /// implementations expose, and because a closed interval is the only way to
 /// name a range that runs through `UInt`'s maximum value.
+///
+/// The whole interval is merged into the container list in one walk, and an
+/// absent bucket the interval covers completely becomes a single Run with no
+/// decode — the same shape as `add_range`. A full-space flip is therefore
+/// linear in the 65536 buckets, where a per-bucket rebuild of the list (plus
+/// materializing every absent bucket as a 65536-element array) used to make
+/// it quadratic.
 ///
 /// `size()` returns `Int64`, so the cardinality stays exact across the whole
 /// value space. Note that the materializing methods (`to_array`, `from_array`,
@@ -662,11 +613,41 @@ pub fn RoaringBitmap::flip(
   }
   let high_start = extract_high(start).to_int()
   let high_end = extract_high(end).to_int()
-  let mut containers = self.containers
+  let result_containers = []
+  let mut ci = 0
   for high = high_start; high <= high_end; high = high + 1 {
     let key = high.to_uint16()
     let (lo, hi) = bucket_local_closed_range(key, start, end)
-    containers = flip_range_in_bucket(containers, key, lo, hi)
+    // Carry over every container that sorts before this key.
+    while ci < self.containers.length() && self.containers[ci].key < key {
+      result_containers.push(self.containers[ci])
+      ci = ci + 1
+    }
+    let has_bucket = ci < self.containers.length() &&
+      self.containers[ci].key == key
+    let flipped = if has_bucket {
+      let existing = self.containers[ci].container
+      ci = ci + 1
+      container_flip_range(existing, lo, hi)
+    } else if lo == 0 && hi == 65535 {
+      // An absent bucket covered completely is one Run, no decode.
+      Some(full_run_container())
+    } else {
+      Some(optimize_container(range_to_array(lo, hi)))
+    }
+    match flipped {
+      None => ()
+      Some(new_container) =>
+        result_containers.push(HighContainer::{
+          key,
+          container: new_container,
+          cardinality: container_cardinality(new_container),
+        })
+    }
   }
-  { containers, size: rebuild_size(containers), }
+  while ci < self.containers.length() {
+    result_containers.push(self.containers[ci])
+    ci = ci + 1
+  }
+  { containers: result_containers, size: rebuild_size(result_containers), }
 }
