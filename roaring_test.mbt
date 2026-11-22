@@ -292,6 +292,73 @@ test "xor drains both tails when bucket counts differ" {
   assert_eq(b.xor(a).to_array(), [1U, 140000U])
 }
 
+// ============ Bitmap x Bitmap word-level set operations ============
+//
+// Both operands dense enough to be Bitmap containers, so the four set
+// operations take the word-level fast path rather than decoding to arrays.
+
+///|
+test "dense Bitmap set operations produce correct values and portable bytes" {
+  // Evens and multiples of 4 in [0, 20000): 10000 and 5000 values, both well
+  // over the 4096 Array threshold, so both are stored as Bitmap containers.
+  let evens = Array::makei(10000, i => (i * 2).reinterpret_as_uint())
+  let mult4 = Array::makei(5000, i => (i * 4).reinterpret_as_uint())
+  let a = @moonbit-roaring.RoaringBitmap::from_array(evens)
+  let b = @moonbit-roaring.RoaringBitmap::from_array(mult4)
+  assert_eq(a.get_stats().bitmap_containers, 1)
+  assert_eq(b.get_stats().bitmap_containers, 1)
+  // mult4 is a subset of evens.
+  let diff_expected = Array::makei(5000, i => (i * 4 + 2).reinterpret_as_uint())
+  assert_eq(a.union(b).to_array(), evens)
+  assert_eq(a.intersect(b).to_array(), mult4)
+  assert_eq(a.difference(b).to_array(), diff_expected)
+  assert_eq(a.xor(b).to_array(), diff_expected)
+  // The fast path must serialize identically to building the same values
+  // through the array pipeline.
+  assert_eq(
+    a.union(b).serialize(),
+    @moonbit-roaring.RoaringBitmap::from_array(evens).serialize(),
+  )
+  assert_eq(
+    a.intersect(b).serialize(),
+    @moonbit-roaring.RoaringBitmap::from_array(mult4).serialize(),
+  )
+  assert_eq(
+    a.difference(b).serialize(),
+    @moonbit-roaring.RoaringBitmap::from_array(diff_expected).serialize(),
+  )
+}
+
+///|
+test "Bitmap x Bitmap results re-encode to Run and Array when cheaper" {
+  let evens = Array::makei(10000, i => (i * 2).reinterpret_as_uint())
+  let odds = Array::makei(10000, i => (i * 2 + 1).reinterpret_as_uint())
+  let a = @moonbit-roaring.RoaringBitmap::from_array(evens)
+  let b = @moonbit-roaring.RoaringBitmap::from_array(odds)
+  assert_eq(a.get_stats().bitmap_containers, 1)
+  assert_eq(b.get_stats().bitmap_containers, 1)
+  // union and xor of evens with odds is the whole interval [0, 20000): one
+  // Run, not a Bitmap.
+  let u = a.union(b)
+  assert_eq(u.get_stats().run_containers, 1)
+  assert_eq(u.size(), 20000)
+  assert_eq(a.xor(b).get_stats().run_containers, 1)
+  // Disjoint, so the intersection is empty and the bucket is dropped.
+  assert_true(a.intersect(b).is_empty())
+  // difference keeps the evens (a Bitmap).
+  assert_eq(a.difference(b).to_array(), evens)
+  // A tiny overlap intersects down to an Array container.
+  let b2_vals = odds.copy()
+  for v in [0U, 2U, 4U] {
+    b2_vals.push(v)
+  }
+  let b2 = @moonbit-roaring.RoaringBitmap::from_array(b2_vals)
+  assert_eq(b2.get_stats().bitmap_containers, 1)
+  let small = a.intersect(b2)
+  assert_eq(small.to_array(), [0U, 2U, 4U])
+  assert_eq(small.get_stats().array_containers, 1)
+}
+
 // ============ min / max across container types ============
 
 ///|

@@ -1,14 +1,20 @@
 // Core container operations: encode/decode, cost-based optimization, and
 // container-level set operations.
 //
-// Design decision: every mutation (add/remove/union/intersect/difference/xor)
-// decodes its operand(s) to a sorted, de-duplicated Array[UInt16], performs the
-// operation on that array, then calls `optimize_container` to re-pick the
-// cheapest representation. This is what makes Run containers a real, reachable
-// outcome instead of dead code: `optimize_container` is on every mutation path,
-// not an unused helper. The tradeoff is O(n) work per mutation instead of
-// specialized per-type-pair fast paths (e.g. word-level bitmap union); that is
-// an intentional correctness-first choice for this project's timeline.
+// Design decision: single-value mutations (add/remove) and mixed-type set
+// operations decode their operand(s) to a sorted, de-duplicated Array[UInt16],
+// perform the operation on that array, then call `optimize_container` to
+// re-pick the cheapest representation. This is what makes Run containers a
+// real, reachable outcome instead of dead code: `optimize_container` is on
+// every mutation path, not an unused helper.
+//
+// The four set operations (union/intersect/difference/xor) take a word-level
+// fast path when both operands are Bitmap containers: 1024 word operations
+// produce the result, and `optimize_bitmap_words` re-picks the cheapest
+// representation from the words alone, decoding only when the result is
+// sparse enough to be an Array. This avoids materializing and merging two
+// 65536-element arrays for the dense case, while staying byte-for-byte
+// identical to the decode-and-optimize pipeline it replaces.
 
 // ============ UInt32 <-> (high16, low16) ============
 
@@ -284,6 +290,60 @@ fn bitmap_cardinality(words : FixedArray[UInt64]) -> Int32 {
   total
 }
 
+///|
+/// Number of runs in a bitmap, counted a word at a time: a run starts at each
+/// set bit whose predecessor is clear, and the predecessor of a word's bit 0
+/// is the previous word's bit 63. O(1024 + runs) with no decode.
+fn bitmap_run_count(words : FixedArray[UInt64]) -> Int32 {
+  let mut count = 0
+  let mut prev_bit63 = 0UL
+  for i = 0; i < words.length(); i = i + 1 {
+    let w = words[i]
+    let starts = w & ((w << 1) | prev_bit63).lnot()
+    count = count + popcount64(starts)
+    prev_bit63 = w >> 63
+  }
+  count
+}
+
+///|
+/// Extract the runs of a bitmap directly from its words, O(1024 + runs). A run
+/// starts where a set bit's predecessor is clear and ends where a set bit's
+/// successor is clear; the two boundary sets have equal size and pair up in
+/// ascending order. Cross-word boundaries are handled by feeding each word its
+/// neighbour's edge bit, so a run spanning several words is emitted once.
+fn bitmap_to_runs(words : FixedArray[UInt64]) -> Array[Run] {
+  let starts = []
+  let ends = []
+  for i = 0; i < words.length(); i = i + 1 {
+    let w = words[i]
+    if w == 0UL {
+      continue
+    }
+    let prev = if i > 0 { words[i - 1] >> 63 } else { 0UL }
+    let next = if i + 1 < words.length() { words[i + 1] & 1UL } else { 0UL }
+    let base = i * 64
+    let mut s = w & ((w << 1) | prev).lnot()
+    while s != 0UL {
+      starts.push(base + lowest_set_bit(s))
+      s = s & (s - 1UL)
+    }
+    let mut e = w & ((w >> 1) | (next << 63)).lnot()
+    while e != 0UL {
+      ends.push(base + lowest_set_bit(e))
+      e = e & (e - 1UL)
+    }
+  }
+  let runs = []
+  for k = 0; k < starts.length(); k = k + 1 {
+    runs.push(Run::{
+      start: starts[k].to_uint16(),
+      length: (ends[k] - starts[k]).to_uint16(),
+    })
+  }
+  runs
+}
+
 // ============ Decode any container to a sorted array ============
 
 ///|
@@ -519,6 +579,30 @@ fn optimize_container(arr : Array[UInt16]) -> Container {
   }
 }
 
+///|
+/// Pick the cheapest representation for a bitmap result without decoding it to
+/// a value array first. Mirrors `optimize_container`'s cost model and tie
+/// breaking exactly (Run, then Array, then Bitmap), so the two agree byte for
+/// byte on the portable output. Only the Array case decodes; a Run result is
+/// read straight from the words and a Bitmap result is wrapped as is.
+fn optimize_bitmap_words(words : FixedArray[UInt64]) -> Container {
+  let card = bitmap_cardinality(words)
+  if card == 0 {
+    return Array([])
+  }
+  let nruns = bitmap_run_count(words)
+  let array_cost = card * 2
+  let bitmap_cost = bitmap_container_size_bytes
+  let run_cost = 2 + 4 * nruns
+  if run_cost <= array_cost && run_cost <= bitmap_cost {
+    Run(bitmap_to_runs(words))
+  } else if array_cost <= bitmap_cost {
+    Array(bitmap_to_array(words))
+  } else {
+    Bitmap(words)
+  }
+}
+
 // ============ Container-level mutation, always re-optimized ============
 
 ///|
@@ -540,28 +624,72 @@ fn container_remove(c : Container, value : UInt16) -> Container {
 
 ///|
 fn container_union(c1 : Container, c2 : Container) -> Container {
-  let a = container_to_sorted_array(c1)
-  let b = container_to_sorted_array(c2)
-  optimize_container(sorted_union(a, b))
+  match (c1, c2) {
+    (Bitmap(w1), Bitmap(w2)) => {
+      let words = FixedArray::make(1024, 0UL)
+      for i = 0; i < w1.length(); i = i + 1 {
+        words[i] = w1[i] | w2[i]
+      }
+      optimize_bitmap_words(words)
+    }
+    _ => {
+      let a = container_to_sorted_array(c1)
+      let b = container_to_sorted_array(c2)
+      optimize_container(sorted_union(a, b))
+    }
+  }
 }
 
 ///|
 fn container_intersect(c1 : Container, c2 : Container) -> Container {
-  let a = container_to_sorted_array(c1)
-  let b = container_to_sorted_array(c2)
-  optimize_container(sorted_intersect(a, b))
+  match (c1, c2) {
+    (Bitmap(w1), Bitmap(w2)) => {
+      let words = FixedArray::make(1024, 0UL)
+      for i = 0; i < w1.length(); i = i + 1 {
+        words[i] = w1[i] & w2[i]
+      }
+      optimize_bitmap_words(words)
+    }
+    _ => {
+      let a = container_to_sorted_array(c1)
+      let b = container_to_sorted_array(c2)
+      optimize_container(sorted_intersect(a, b))
+    }
+  }
 }
 
 ///|
 fn container_difference(c1 : Container, c2 : Container) -> Container {
-  let a = container_to_sorted_array(c1)
-  let b = container_to_sorted_array(c2)
-  optimize_container(sorted_difference(a, b))
+  match (c1, c2) {
+    (Bitmap(w1), Bitmap(w2)) => {
+      let words = FixedArray::make(1024, 0UL)
+      for i = 0; i < w1.length(); i = i + 1 {
+        words[i] = w1[i] & w2[i].lnot()
+      }
+      optimize_bitmap_words(words)
+    }
+    _ => {
+      let a = container_to_sorted_array(c1)
+      let b = container_to_sorted_array(c2)
+      optimize_container(sorted_difference(a, b))
+    }
+  }
 }
 
 ///|
 fn container_xor(c1 : Container, c2 : Container) -> Container {
-  let a = container_to_sorted_array(c1)
-  let b = container_to_sorted_array(c2)
-  optimize_container(sorted_xor(a, b))
+  match (c1, c2) {
+    (Bitmap(w1), Bitmap(w2)) => {
+      let words = FixedArray::make(1024, 0UL)
+      for i = 0; i < w1.length(); i = i + 1 {
+        words[i] = w1[i] ^ w2[i]
+      }
+      optimize_bitmap_words(words)
+    }
+    _ => {
+      let a = container_to_sorted_array(c1)
+      let b = container_to_sorted_array(c2)
+      optimize_container(sorted_xor(a, b))
+    }
+  }
 }
