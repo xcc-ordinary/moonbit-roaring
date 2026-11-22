@@ -39,7 +39,7 @@ Array/Bitmap/Run 三种容器间选择，并实现 Roaring portable 二进制格
 moon add xcc-ordinary/moonbit-roaring
 ```
 
-已发布：[`xcc-ordinary/moonbit-roaring@0.1.0`](https://mooncakes.io/docs/xcc-ordinary/moonbit-roaring)。已在全新项目中完成真实下载、编译及 portable 往返测试，`wasm`、`wasm-gc`、`js` 三个目标均通过。
+已发布：[`xcc-ordinary/moonbit-roaring@0.2.0`](https://mooncakes.io/docs/xcc-ordinary/moonbit-roaring)。已在全新项目中完成真实下载、编译及 portable 往返测试，`wasm`、`wasm-gc`、`js` 三个目标均通过（0.2.0 于 2026-11-22 复验）。
 
 ## 示例
 
@@ -52,7 +52,7 @@ let result = sparse.union(consecutive)
 let bytes = result.serialize()
 let restored = match @roaring.RoaringBitmap::deserialize(bytes) {
   Ok(bitmap) => bitmap
-  Err(error) => panic("invalid bitmap: \{error}")
+  Err(error) => abort("invalid bitmap: \{error}")
 }
 
 let first_three = restored.iter().take(3).to_array()

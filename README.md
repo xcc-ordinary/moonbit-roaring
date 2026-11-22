@@ -43,7 +43,7 @@ A source-linked, fair comparison is in
 moon add xcc-ordinary/moonbit-roaring
 ```
 
-Published package: [`xcc-ordinary/moonbit-roaring@0.1.0`](https://mooncakes.io/docs/xcc-ordinary/moonbit-roaring). A clean-project smoke test verifies download, compilation, and portable round-trip behavior on `wasm`, `wasm-gc`, and `js`.
+Published package: [`xcc-ordinary/moonbit-roaring@0.2.0`](https://mooncakes.io/docs/xcc-ordinary/moonbit-roaring). A clean-project smoke test verifies download, compilation, and portable round-trip behavior on `wasm`, `wasm-gc`, and `js` (re-verified for 0.2.0 on 2026-11-22).
 
 ## Example
 
@@ -56,7 +56,7 @@ let result = sparse.union(consecutive)
 let bytes = result.serialize()
 let restored = match @roaring.RoaringBitmap::deserialize(bytes) {
   Ok(bitmap) => bitmap
-  Err(error) => panic("invalid bitmap: \{error}")
+  Err(error) => abort("invalid bitmap: \{error}")
 }
 
 let first_three = restored.iter().take(3).to_array()

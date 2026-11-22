@@ -16,7 +16,7 @@
 | 维度 | `kesmeey/RoaringBitmap` | `xcc-ordinary/moonbit-roaring` | 对复审的意义 |
 | --- | --- | --- | --- |
 | 基础 32 位整数集合与四则集合运算 | 已实现 | 已实现 | 这是重叠部分，不能当作本项目创新点 |
-| Mooncakes 发布 | 已发布 `0.1.0` | 已发布 [`0.1.0`](https://mooncakes.io/docs/xcc-ordinary/moonbit-roaring)，并从全新项目完成三目标安装测试 | 双方都有可安装版本，本项目另有 GitHub Release 与公开 CI |
+| Mooncakes 发布 | 已发布 `0.1.0` | 已发布 [`0.2.0`](https://mooncakes.io/docs/xcc-ordinary/moonbit-roaring)（0.1.0 于 2026-09-18，0.2.0 于 2026-11-22），并从全新项目完成三目标安装与 portable 往返测试 | 双方都有可安装版本，本项目另有 GitHub Release 与公开 CI（四目标） |
 | 当前 MoonBit 工具链 | 在 `moon 0.1.20260904` 下因旧泛型语法出现 3 个解析错误，测试无法启动 | 同一工具链下可运行 | 证明本项目提供当前生态可直接使用的实现 |
 | Run 容器 | 定义了 Run 相关代码和公开 `optimize_container`，但该函数只有定义、没有调用点；`add` 主路径只做 Array/Bitmap 转换 | 每个核心变更路径最终按字节成本重新选择 Array/Bitmap/Run | 证明连续数据压缩不是声明能力，而是实际生效的行为 |
 | Portable 序列化 | 未找到 `serialize`/`deserialize`/字节格式实现 | 实现 Roaring portable 格式读写 | 这是最强的互补点：MoonBit 可进入跨语言 Roaring 数据链路 |
@@ -130,6 +130,8 @@ Roaring 的价值不仅是压缩算法，还在于统一的 portable 数据格�
 2026-11-22 同日完成审查中最后一项深层优化——迭代器桶内惰性解码。原 `iter`/`iter_from` 虽按桶惰性（不一次性物化整个位图），但每个桶仍用 `container_to_sorted_array` 整体展开：Bitmap/Run 桶会物化最多 65536 个元素，即使只取一个值。改为私有 `LazyCursor` 结构游标——Array 用索引、Bitmap 用当前字内 Kernighan 逐置位位、Run 用"下一值 + 倒计时"缓存当前区间——按容器类型静态分派、每值单层 Option（走查直接复用、不二次包裹），桶内 seek 免解码（Array 二分、Bitmap 掩码当前字、Run 对 run 末尾二分）。新增白盒等价测试：对三种表示与全部采样 seek 点（含字/桶边界、值下方间隙、越界），逐值钉住游标输出 == 解码管线后缀（含非零 key 钉住 combine）；该测试在开发中实际抓住一处"Run seek 越过末 run 后错误重载 run 0"的缺陷并修复。另补 Bitmap 字内 seek、Run 间隙/跨 run seek 两个黑盒测试与一个全量迭代吞吐基准。自身前后实测（`wasm --release`，同一工具链）：`iter_from` 近末端 seek（4096 桶宽位图取 1 值）99.65 µs → 312.68 ns（约 319 倍）；窄区间稠密 `range`（200 万值取 11 值窗口）100.74 µs → 1.05 µs（约 96 倍）。代价如实记录：惰性流式 `iter` 全量遍历混合 fixture 由 100.50 µs 增至 132.34 µs（约 1.32 倍慢），这是逐值惰性相对整桶 eager 解码的固有开销；批量物化 API `to_array()` 仍走原 eager 路径、性能不变——需要一次性取全部值时用 `to_array()`，需要流式/提前停止/seek 时用 `iter`/`iter_from`，与官方 Java/Go"惰性迭代器 + 批量 toArray"的分工一致。三目标测试由 238 增至 243 项全部通过，`moon info` 后 `.mbti` 零 diff（`LazyCursor` 为私有、公共 API 不变），CRoaring WASM 封装、官方 Java、官方 Go 三套跨进程校验仍各 19/19 通过。上述数字为本项目自身前后对照，不据此声称优于其他实现。
 
 2026-11-22 同日将 `native` 目标纳入 CI。此前 CI 仅覆盖 `wasm`、`wasm-gc`、`js`；本次先在 Linux x86_64（系统 gcc，同一工具链 `moon 0.1.20261119` / `moonc v0.10.22+124d61d05`）完整验证 `moon check/build/test --target native`：243 项测试全部通过，三个可运行示例（analytics、inverted_index、portable_window）均正常执行并输出预期结果。随后把 CI 测试矩阵扩为四目标（`wasm`、`wasm-gc`、`js`、`native`），native 在 ubuntu-latest 上用预装 gcc 构建。库本身无平台相关代码，native 通过进一步佐证纯 MoonBit 实现的可移植性；README 中英文验证证据段已同步。
+
+2026-11-22 同日发布 `0.2.0` 至 Mooncakes（`moon publish` 返回 200 OK），并创建 GitHub tag `v0.2.0` 与 Release。该版本汇集 v0.1.0 以来 52 个提交：破坏性变更 `size()` 返回 `Int64`（README 附迁移指南）、字级 Bitmap 集合运算、单趟 `flip`、平衡多路并/交、基于 seek 的区间查询、逐值惰性迭代、官方 Java/Go 双向跨进程校验接入 CI、native 目标验证并纳入 CI 矩阵（四目标）。发布前 `moon publish --dry-run` 预检通过；发布后在全新项目真实下载 `xcc-ordinary/moonbit-roaring@0.2.0`、编译并完成 portable 往返（sparse∪consecutive → serialize → deserialize → 集合相等且字节稳定），`wasm`/`wasm-gc`/`js` 三目标全部通过（size=10000、15 字节）。冒烟测试同时暴露 README 与 usage 文档示例中 `panic("…")` 写法在当前工具链编译不过（`panic` 无参），已把四处文档示例修正为 `abort("…")`；仓库自身代码与测试一直使用无参 `panic()`，不受影响。以上均为本项目自身验证记录。
 
 ## 9 月 17 日至 24 日执行顺序
 

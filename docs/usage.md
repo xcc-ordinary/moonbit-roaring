@@ -232,7 +232,7 @@ given offset and reports where the bitmap ended:
 ```moonbit
 let (bitmap, end) = match @roaring.RoaringBitmap::deserialize_at(buffer, offset) {
   Ok(pair) => pair
-  Err(error) => panic("invalid bitmap at \{offset}: \{error}")
+  Err(error) => abort("invalid bitmap at \{offset}: \{error}")
 }
 // `end` is the first byte after this bitmap, so the next frame starts there.
 ```
@@ -414,7 +414,7 @@ for after an interop read:
 ```moonbit
 let foreign = match @roaring.RoaringBitmap::deserialize(bytes) {
   Ok(b) => b
-  Err(error) => panic("invalid bitmap: \{error}")
+  Err(error) => abort("invalid bitmap: \{error}")
 }
 let optimized = foreign.run_optimize()
 // Same elements, and now the same encoding this library would have produced
