@@ -1,6 +1,8 @@
 .DS_Store
 node_modules/
 tools/crossref-fixtures/fixtures.json
+tools/official-crosscheck/lib/
+tools/official-crosscheck/build/
 _build/
 target/
 target
