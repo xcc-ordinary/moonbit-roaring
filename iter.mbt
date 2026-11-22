@@ -282,19 +282,22 @@ pub fn RoaringBitmap::range_cardinality(
   if start >= end {
     return 0L
   }
-  let high_start = extract_high(start).to_int()
-  let high_end = extract_high(end - 1U).to_int()
+  let high_start = extract_high(start)
+  let high_end = extract_high(end - 1U)
   let mut count = 0L
-  for high = high_start; high <= high_end; high = high + 1 {
-    let key = high.to_uint16()
-    match find_bucket(self.containers, key) {
-      NotFound(_) => ()
-      Found(idx) => {
-        let (lo, hi) = bucket_local_range(key, start, end)
-        count = count +
-          container_rank_range(self.containers[idx].container, lo, hi).to_int64()
-      }
+  // Walk the containers that actually exist, skipping keys below the interval
+  // and stopping past it, rather than probing every possible key in
+  // [high_start, high_end] — a wide interval over a sparse bitmap used to cost
+  // up to 65536 bucket lookups even when only a handful of buckets are present.
+  for hc in self.containers {
+    if hc.key < high_start {
+      continue
     }
+    if hc.key > high_end {
+      break
+    }
+    let (lo, hi) = bucket_local_range(hc.key, start, end)
+    count = count + container_rank_range(hc.container, lo, hi).to_int64()
   }
   count
 }

@@ -491,11 +491,28 @@ pub fn RoaringBitmap::xor(
 pub fn RoaringBitmap::union_all(
   bitmaps : Array[RoaringBitmap],
 ) -> RoaringBitmap {
-  let mut result = RoaringBitmap::new()
-  for i = 0; i < bitmaps.length(); i = i + 1 {
-    result = result.union(bitmaps[i])
+  if bitmaps.length() == 0 {
+    return RoaringBitmap::new()
   }
-  result
+  // Balanced pairwise merge: each round halves the number of bitmaps, so any
+  // one container is walked O(log K) times rather than O(K) under a left fold
+  // that keeps re-walking the growing accumulator.
+  let mut current = bitmaps.copy()
+  while current.length() > 1 {
+    let next : Array[RoaringBitmap] = []
+    let mut i = 0
+    while i < current.length() {
+      if i + 1 < current.length() {
+        next.push(current[i].union(current[i + 1]))
+        i = i + 2
+      } else {
+        next.push(current[i])
+        i = i + 1
+      }
+    }
+    current = next
+  }
+  current[0]
 }
 
 ///|
@@ -508,9 +525,26 @@ pub fn RoaringBitmap::intersect_all(
   if bitmaps.length() == 0 {
     return RoaringBitmap::new()
   }
-  let mut result = bitmaps[0]
-  for i = 1; i < bitmaps.length(); i = i + 1 {
-    result = result.intersect(bitmaps[i])
+  // Intersect the smallest bitmaps first so the running result shrinks as fast
+  // as possible, and stop once it is empty (it can only stay empty).
+  let ordered = bitmaps.copy()
+  ordered.sort_by(fn(a, b) {
+    let sa = a.size()
+    let sb = b.size()
+    if sa < sb {
+      -1
+    } else if sa > sb {
+      1
+    } else {
+      0
+    }
+  })
+  let mut result = ordered[0]
+  for i = 1; i < ordered.length(); i = i + 1 {
+    result = result.intersect(ordered[i])
+    if result.is_empty() {
+      break
+    }
   }
   result
 }
@@ -624,13 +658,17 @@ pub fn RoaringBitmap::range(
   if start > end {
     return self
   }
+  // Seek to the first value >= start and stop at the first value > end, so only
+  // the buckets the interval touches are decoded (not the whole bitmap), and
+  // the collected values are already ascending for from_sorted — no re-sort.
   let selected : Array[UInt32] = []
-  for value in self.to_array() {
-    if value >= start && value <= end {
-      selected.push(value)
+  for value in self.iter_from(start) {
+    if value > end {
+      break
     }
+    selected.push(value)
   }
-  RoaringBitmap::from_array(selected)
+  RoaringBitmap::from_sorted(selected)
 }
 
 // ============ Serialization (CRoaring-compatible) ============

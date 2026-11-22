@@ -474,6 +474,66 @@ test "intersect_all is empty when any bitmap is disjoint from the rest" {
   assert_true(result.is_empty())
 }
 
+///|
+test "union_all balanced merge matches a left fold on dense buckets" {
+  // Five dense bitmaps (Run and Bitmap containers) across several buckets: the
+  // balanced pairwise merge must produce exactly the left fold's value set and
+  // portable bytes, including the odd bitmap carried through each round.
+  let parts = [
+    @moonbit-roaring.RoaringBitmap::new().add_range(0U, 50000U),
+    @moonbit-roaring.RoaringBitmap::new().add_range(30000U, 90000U),
+    @moonbit-roaring.RoaringBitmap::new().add_range(65536U, 131072U),
+    @moonbit-roaring.RoaringBitmap::from_array(
+      Array::makei(5000, i => (131072 + i * 2).reinterpret_as_uint()),
+    ),
+    @moonbit-roaring.RoaringBitmap::new().add_range(200000U, 260000U),
+  ]
+  let balanced = @moonbit-roaring.RoaringBitmap::union_all(parts)
+  let mut folded = parts[0]
+  for i = 1; i < parts.length(); i = i + 1 {
+    folded = folded.union(parts[i])
+  }
+  assert_eq(balanced.to_array(), folded.to_array())
+  assert_eq(balanced.serialize(), folded.serialize())
+}
+
+///|
+test "intersect_all smallest-first matches a left fold on dense buckets" {
+  let big1 = @moonbit-roaring.RoaringBitmap::new().add_range(0U, 100000U)
+  let big2 = @moonbit-roaring.RoaringBitmap::new().add_range(50000U, 150000U)
+  let tiny = @moonbit-roaring.RoaringBitmap::from_array([60000U, 70000U, 80000U])
+  let result = @moonbit-roaring.RoaringBitmap::intersect_all([big1, big2, tiny])
+  assert_eq(result.to_array(), [60000U, 70000U, 80000U])
+  let folded = big1.intersect(big2).intersect(tiny)
+  assert_eq(result.serialize(), folded.serialize())
+}
+
+///|
+test "intersect_all stops early when the smallest is disjoint" {
+  let big1 = @moonbit-roaring.RoaringBitmap::new().add_range(0U, 100000U)
+  let big2 = @moonbit-roaring.RoaringBitmap::new().add_range(0U, 100000U)
+  let tiny = @moonbit-roaring.RoaringBitmap::from_array([200000U])
+  let result = @moonbit-roaring.RoaringBitmap::intersect_all([big1, big2, tiny])
+  assert_true(result.is_empty())
+}
+
+///|
+test "range decodes only the touched buckets of a wide dense bitmap" {
+  let bm = @moonbit-roaring.RoaringBitmap::new().add_range(0U, 2000000U)
+  let window = bm.range(1000000U, 1000010U)
+  assert_eq(
+    window.to_array(),
+    Array::makei(11, i => (1000000 + i).reinterpret_as_uint()),
+  )
+  let across = bm.range(65530U, 65540U)
+  assert_eq(
+    across.to_array(),
+    Array::makei(11, i => (65530 + i).reinterpret_as_uint()),
+  )
+  // An inverted interval is a no-op returning the whole bitmap.
+  assert_eq(bm.range(5U, 4U).size(), bm.size())
+}
+
 // ============ add_many: batch construction ============
 //
 // add_many sorts its input and merges each bucket once. The tests below pin

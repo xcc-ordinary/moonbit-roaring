@@ -200,3 +200,55 @@ test "bench iter_from near the end of a wide bitmap" (it : @bench.T) {
     it.keep(found)
   })
 }
+
+///|
+// range_cardinality over the whole 32-bit space of a sparse bitmap: it walks
+// the few present containers instead of probing all 65536 possible bucket
+// keys. If this climbs toward the bucket-key count, the walk has regressed.
+
+///|
+test "bench range_cardinality wide sparse" (it : @bench.T) {
+  let bm = @moonbit-roaring.RoaringBitmap::from_array([
+    100U, 70000U, 200000U, 1000000U, 100000000U, 4000000000U,
+  ])
+  it.keep(bm)
+  it.bench(fn() {
+    let count = bm.range_cardinality(0U, 0xFFFFFFFFU)
+    it.keep(count)
+  })
+}
+
+///|
+// A narrow window inside a wide dense bitmap: only the touched bucket is
+// decoded via iter_from, not the whole bitmap materialized and re-sorted.
+
+///|
+test "bench range narrow dense" (it : @bench.T) {
+  let bm = @moonbit-roaring.RoaringBitmap::new().add_range(0U, 2000000U)
+  it.keep(bm)
+  it.bench(fn() {
+    let window = bm.range(1000000U, 1000010U)
+    it.keep(window)
+  })
+}
+
+///|
+// Many bitmaps with disjoint bucket sets: union_all merges them pairwise in
+// balanced rounds, so intermediate results stay small instead of re-walking a
+// growing accumulator under a left fold.
+
+///|
+test "bench union_all many buckets" (it : @bench.T) {
+  let parts : Array[@moonbit-roaring.RoaringBitmap] = []
+  for i = 0; i < 32; i = i + 1 {
+    let base = (i * 65536).reinterpret_as_uint()
+    parts.push(
+      @moonbit-roaring.RoaringBitmap::new().add_range(base, base + 30000U),
+    )
+  }
+  it.keep(parts)
+  it.bench(fn() {
+    let merged = @moonbit-roaring.RoaringBitmap::union_all(parts)
+    it.keep(merged)
+  })
+}

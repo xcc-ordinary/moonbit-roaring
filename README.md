@@ -151,7 +151,7 @@ rather than trusting a summary. See
 
 - Compatibility check on 2026-11-22: `moon 0.1.20261119`, `moonc
   v0.10.22+124d61d05`, and `moonrun 0.1.20261119` (`moon version --all`).
-  The `wasm`, `wasm-gc`, and `js` targets each passed check, build, and all 232
+  The `wasm`, `wasm-gc`, and `js` targets each passed check, build, and all 237
   tests; all three runnable examples completed successfully.
 - Tests run on `wasm`, `wasm-gc`, and `js` in CI.
 - Official Java-generated files from `RoaringFormatSpec/testdata` are decoded,
