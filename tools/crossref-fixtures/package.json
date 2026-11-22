@@ -5,7 +5,8 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "generate": "node generate.mjs && node to_mbt.mjs"
+    "generate": "node generate.mjs && node to_mbt.mjs",
+    "crosscheck": "node crosscheck.mjs"
   },
   "dependencies": {
     "roaring-wasm": "^1.1.0"
