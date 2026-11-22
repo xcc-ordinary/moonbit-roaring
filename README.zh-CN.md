@@ -7,7 +7,7 @@
 一个以互操作为核心的 MoonBit RoaringBitmap 实现：自动在
 Array/Bitmap/Run 三种容器间选择，并实现 Roaring portable 二进制格式。
 
-要求 MoonBit 编译器（`moonc`）版本不低于 v0.10.16。CI 会记录工具链版本，
+要求 MoonBit 编译器（`moonc`）版本不低于 v0.10.22。CI 会记录工具链版本，
 并对所有支持的目标执行检查、构建和测试。
 
 本项目是对 [`kesmeey/RoaringBitmap`](https://github.com/kesmeey/RoaringBitmap)
@@ -136,8 +136,8 @@ moon run cmd/main -- info 3a30000001000000000002001000000001006400e803
 
 ## 可复现证据
 
-- 2026-11-22 兼容性复核使用 `moon 0.1.20261104`、`moonc
-  v0.10.20+65efd5b93` 和 `moonrun 0.1.20261104`（`moon version --all`）。
+- 2026-11-22 兼容性复核使用 `moon 0.1.20261119`、`moonc
+  v0.10.22+124d61d05` 和 `moonrun 0.1.20261119`（`moon version --all`）。
   `wasm`、`wasm-gc`、`js` 均通过检查、构建和全部 216 项测试；三个可运行示例均成功。
 - CI 在 `wasm`、`wasm-gc`、`js` 三个目标运行检查和测试。
 - 直接读取 `RoaringFormatSpec/testdata` 中由官方 Java 实现生成的文件，验证已知值，

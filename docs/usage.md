@@ -4,8 +4,8 @@ Practical guide to the parts of the API that are easy to get wrong, plus the
 command-line tool. The [README](../README.md) covers what the package is and
 why it exists; this page covers how to drive it.
 
-Everything here was run against the checked-in code on `moon 0.1.20261104`
-(`moonc v0.10.20`).
+Everything here was run against the checked-in code on `moon 0.1.20261119`
+(`moonc v0.10.22`).
 
 ## Table of contents
 

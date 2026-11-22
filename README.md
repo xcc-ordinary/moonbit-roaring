@@ -8,7 +8,7 @@ An interoperability-focused RoaringBitmap implementation for MoonBit. It
 combines automatic Array/Bitmap/Run representation selection with the Roaring
 portable binary format.
 
-Requires MoonBit compiler (`moonc`) v0.10.16 or newer. CI records the installed
+Requires MoonBit compiler (`moonc`) v0.10.22 or newer. CI records the installed
 toolchain version and builds, checks, and tests every supported target.
 
 The project complements, rather than replaces,
@@ -149,8 +149,8 @@ rather than trusting a summary. See
 
 ## Verification evidence
 
-- Compatibility check on 2026-11-22: `moon 0.1.20261104`, `moonc
-  v0.10.20+65efd5b93`, and `moonrun 0.1.20261104` (`moon version --all`).
+- Compatibility check on 2026-11-22: `moon 0.1.20261119`, `moonc
+  v0.10.22+124d61d05`, and `moonrun 0.1.20261119` (`moon version --all`).
   The `wasm`, `wasm-gc`, and `js` targets each passed check, build, and all 216
   tests; all three runnable examples completed successfully.
 - Tests run on `wasm`, `wasm-gc`, and `js` in CI.
