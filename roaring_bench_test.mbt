@@ -163,6 +163,22 @@ test "bench flip wide range (2048 buckets)" (it : @bench.T) {
 }
 
 ///|
+// run_optimize on a dense Bitmap container that stays a Bitmap: the word path
+// re-picks the representation from the words alone, with no 65536-element
+// decode, no array_to_runs scan and no re-encode back to words.
+
+///|
+test "bench run_optimize dense bitmap" (it : @bench.T) {
+  let bm = @moonbit-roaring.RoaringBitmap::from_array(
+    Array::makei(9000, i => (i * 2).reinterpret_as_uint()),
+  )
+  it.bench(fn() {
+    let optimized = bm.run_optimize()
+    it.keep(optimized)
+  })
+}
+
+///|
 // `iter_from` seeks with a binary search instead of walking from the start.
 // The comparison that motivates it — `iter().filter(v => v >= x)` — decodes
 // every bucket before x, which on this fixture is 4000 buckets and seconds of

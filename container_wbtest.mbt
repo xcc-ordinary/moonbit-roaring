@@ -102,3 +102,59 @@ test "bitmap_run_count and bitmap_to_runs match the array pipeline" {
     assert_true(bitmap_to_runs(words) == reference_runs)
   }
 }
+
+///|
+test "run_optimize re-encodes Bitmap and Run containers without decoding" {
+  // A Bitmap container holding one full run. A locally built bitmap would
+  // already be a Run, so this shape only arises from a foreign producer;
+  // run_optimize must turn it into a Run via the word path.
+  let full = RoaringBitmap::{
+    containers: [
+      HighContainer::{
+        key: (0 : UInt16),
+        container: Bitmap(FixedArray::make(1024, 0xFFFFFFFFFFFFFFFFUL)),
+        cardinality: 65536,
+      },
+    ],
+    size: 65536L,
+  }
+  let optimized = full.run_optimize()
+  assert_eq(optimized.get_stats().run_containers, 1)
+  assert_eq(optimized.size(), 65536L)
+  assert_eq(optimized.min(), Some(0U))
+  assert_eq(optimized.max(), Some(65535U))
+  // A dense Bitmap with many runs stays a Bitmap.
+  let alternating = RoaringBitmap::{
+    containers: [
+      HighContainer::{
+        key: (0 : UInt16),
+        container: Bitmap(FixedArray::make(1024, 0x5555555555555555UL)),
+        cardinality: 32768,
+      },
+    ],
+    size: 32768L,
+  }
+  assert_eq(alternating.run_optimize().get_stats().bitmap_containers, 1)
+  // An already-optimal Run is kept by the cost pre-check, byte for byte.
+  let run_bm = RoaringBitmap::from_range(0U, 10000U)
+  assert_eq(run_bm.get_stats().run_containers, 1)
+  assert_eq(run_bm.run_optimize().serialize(), run_bm.serialize())
+  // A foreign Run of three singletons is cheaper as an Array, so it converts.
+  let sparse_run = RoaringBitmap::{
+    containers: [
+      HighContainer::{
+        key: (0 : UInt16),
+        container: Run([
+          Run::{ start: (0 : UInt16), length: (0 : UInt16), },
+          Run::{ start: (2 : UInt16), length: (0 : UInt16), },
+          Run::{ start: (4 : UInt16), length: (0 : UInt16), },
+        ]),
+        cardinality: 3,
+      },
+    ],
+    size: 3L,
+  }
+  let sparse_opt = sparse_run.run_optimize()
+  assert_eq(sparse_opt.get_stats().array_containers, 1)
+  assert_eq(sparse_opt.to_array(), [0U, 2U, 4U])
+}

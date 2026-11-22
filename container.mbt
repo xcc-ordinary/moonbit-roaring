@@ -258,13 +258,14 @@ fn bitmap_to_array(words : FixedArray[UInt64]) -> Array[UInt16] {
   let result = []
   for word_idx = 0; word_idx < words.length(); word_idx = word_idx + 1 {
     let mut word = words[word_idx]
-    let mut bit = 0
+    let base = word_idx * 64
+    // Walk only the set bits (Kernighan), not all 64 positions: a word with
+    // one set bit costs one iteration instead of sixty-four. Same pattern as
+    // the complement paths' emit_set_bits.
     while word != 0UL {
-      if (word & 1UL) != 0UL {
-        result.push((word_idx * 64 + bit).to_uint16())
-      }
-      word = word >> 1
-      bit = bit + 1
+      let bit = lowest_set_bit(word)
+      result.push((base + bit).to_uint16())
+      word = word & (word - 1UL)
     }
   }
   result

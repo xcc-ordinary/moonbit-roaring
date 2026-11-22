@@ -713,12 +713,34 @@ pub fn RoaringBitmap::from_sorted(values : Array[UInt32]) -> RoaringBitmap {
 pub fn RoaringBitmap::run_optimize(self : RoaringBitmap) -> RoaringBitmap {
   let result_containers = []
   for hc in self.containers {
-    let values = container_to_sorted_array(hc.container)
-    let new_container = optimize_container(values)
+    let new_container = match hc.container {
+      Bitmap(words) =>
+        // Re-pick from the words alone, with no 65536-element decode: a
+        // Bitmap already in its cheapest form stays a Bitmap, and a runny one
+        // becomes a Run extracted straight from the words.
+        optimize_bitmap_words(words)
+      Run(runs) => {
+        // The Run cost is known from the run count and the cached cardinality,
+        // so an already-optimal Run is kept without decoding it to values.
+        let run_cost = 2 + 4 * runs.length()
+        let array_cost = hc.cardinality * 2
+        if run_cost <= array_cost && run_cost <= bitmap_container_size_bytes {
+          hc.container
+        } else {
+          optimize_container(runs_to_array(runs))
+        }
+      }
+      Array(_) =>
+        // An Array already is a sorted value array; optimize_container reads
+        // it directly, with no decode.
+        optimize_container(container_to_sorted_array(hc.container))
+    }
+    // run_optimize preserves the value set, so the cached cardinality is still
+    // exact — no need to recount the re-encoded container.
     result_containers.push(HighContainer::{
       key: hc.key,
       container: new_container,
-      cardinality: container_cardinality(new_container),
+      cardinality: hc.cardinality,
     })
   }
   { containers: result_containers, size: self.size, }
