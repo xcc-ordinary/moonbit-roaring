@@ -14,14 +14,13 @@ let no_offset_threshold : Int32 = 4
 
 ///|
 fn has_run_container(containers : Array[HighContainer]) -> Bool {
-  let mut found = false
   for hc in containers {
     match hc.container {
-      Run(_) => found = true
+      Run(_) => return true
       _ => ()
     }
   }
-  found
+  false
 }
 
 ///|
@@ -387,7 +386,8 @@ pub fn RoaringBitmap::deserialize_at(
       pos = pos + bitmap_container_size_bytes
       Bitmap(words)
     }
-    if container_cardinality(container) != cardinality {
+    let actual_cardinality = container_cardinality(container)
+    if actual_cardinality != cardinality {
       return Err(
         DeserializationError("container cardinality does not match header"),
       )
@@ -395,7 +395,7 @@ pub fn RoaringBitmap::deserialize_at(
     containers.push(HighContainer::{
       key: keys[k],
       container,
-      cardinality: container_cardinality(container),
+      cardinality: actual_cardinality,
     })
   }
   let total = rebuild_size(containers)

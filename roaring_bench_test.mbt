@@ -252,3 +252,24 @@ test "bench union_all many buckets" (it : @bench.T) {
     it.keep(merged)
   })
 }
+
+///|
+// Deserializing many Bitmap containers: each container's cardinality is a
+// 1024-word popcount, so computing it once instead of twice (validate + store)
+// halves that work. The fixture is 32 buckets of 8192 even values each.
+
+///|
+test "bench deserialize many bitmap containers" (it : @bench.T) {
+  let values : Array[UInt32] = []
+  for b = 0; b < 32; b = b + 1 {
+    for j = 0; j < 8192; j = j + 1 {
+      values.push((b * 65536 + j * 2).reinterpret_as_uint())
+    }
+  }
+  let bytes = @moonbit-roaring.RoaringBitmap::from_array(values).serialize()
+  it.keep(bytes)
+  it.bench(fn() {
+    let bm = @moonbit-roaring.RoaringBitmap::deserialize(bytes)
+    it.keep(bm)
+  })
+}

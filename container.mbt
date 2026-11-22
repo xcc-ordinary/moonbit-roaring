@@ -410,13 +410,34 @@ fn highest_set_bit(word : UInt64) -> Int32 {
   if word == 0UL {
     -1
   } else {
+    // Mirror of lowest_set_bit's halving cascade, scanning from the top: six
+    // steps instead of a shift-by-one loop of up to 63 iterations.
+    let mut n = 63
     let mut w = word
-    let mut bit = 63
-    while (w & (1UL << 63)) == 0UL {
-      w = w << 1
-      bit = bit - 1
+    if (w & 0xFFFFFFFF00000000UL) == 0UL {
+      n = n - 32
+      w = w << 32
     }
-    bit
+    if (w & 0xFFFF000000000000UL) == 0UL {
+      n = n - 16
+      w = w << 16
+    }
+    if (w & 0xFF00000000000000UL) == 0UL {
+      n = n - 8
+      w = w << 8
+    }
+    if (w & 0xF000000000000000UL) == 0UL {
+      n = n - 4
+      w = w << 4
+    }
+    if (w & 0xC000000000000000UL) == 0UL {
+      n = n - 2
+      w = w << 2
+    }
+    if (w & 0x8000000000000000UL) == 0UL {
+      n = n - 1
+    }
+    n
   }
 }
 

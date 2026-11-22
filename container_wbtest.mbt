@@ -158,3 +158,33 @@ test "run_optimize re-encodes Bitmap and Run containers without decoding" {
   assert_eq(sparse_opt.get_stats().array_containers, 1)
   assert_eq(sparse_opt.to_array(), [0U, 2U, 4U])
 }
+
+///|
+test "highest_set_bit mirrors lowest_set_bit's halving cascade" {
+  // (word, lowest, highest): explicit expectations pin the cascade against the
+  // shift-by-one loop highest_set_bit used to run.
+  let cases : Array[(UInt64, Int32, Int32)] = [
+    (0UL, -1, -1),
+    (1UL, 0, 0),
+    (2UL, 1, 1),
+    (0x8000000000000000UL, 63, 63),
+    (0xFFFFFFFFFFFFFFFFUL, 0, 63),
+    (0x0000000100000000UL, 32, 32),
+    (0x00000000FFFFFFFFUL, 0, 31),
+    (0xFFFFFFFF00000000UL, 32, 63),
+    (0x5555555555555555UL, 0, 62),
+    (0xAAAAAAAAAAAAAAAAUL, 1, 63),
+    (0x0000800000000000UL, 47, 47),
+  ]
+  for c in cases {
+    let (w, lo, hi) = c
+    assert_eq(lowest_set_bit(w), lo)
+    assert_eq(highest_set_bit(w), hi)
+  }
+  // Every single-bit word exercises each cascade step boundary.
+  for i = 0; i < 64; i = i + 1 {
+    let w = 1UL << i
+    assert_eq(lowest_set_bit(w), i)
+    assert_eq(highest_set_bit(w), i)
+  }
+}
