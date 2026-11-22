@@ -80,3 +80,18 @@ jobs:
           echo "6b25756b77a7f56da2428f9eef6ba6a56b614617  tools/official-crosscheck/lib/RoaringBitmap-1.6.30.jar" | sha1sum -c -
       - name: Live cross-process check against the official Java implementation
         run: node tools/official-crosscheck/crosscheck.mjs
+
+  go-crosscheck:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-go@v5
+        with:
+          go-version: stable
+          cache-dependency-path: tools/go-crosscheck/go.sum
+      - name: Install MoonBit
+        run: |
+          curl -fsSL https://cli.moonbitlang.com/install/unix.sh | bash -s latest
+          echo "$HOME/.moon/bin" >> "$GITHUB_PATH"
+      - name: Live cross-process check against the official Go implementation
+        run: node tools/go-crosscheck/crosscheck.mjs
