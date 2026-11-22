@@ -59,3 +59,24 @@ jobs:
         run: moon fmt
       - name: Verify checked-in fixtures are reproducible
         run: git diff --exit-code -- official_format_test.mbt golden_fixtures_test.mbt
+
+  official-crosscheck:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+      - name: Install MoonBit
+        run: |
+          curl -fsSL https://cli.moonbitlang.com/install/unix.sh | bash -s latest
+          echo "$HOME/.moon/bin" >> "$GITHUB_PATH"
+      - name: Fetch pinned official Java RoaringBitmap jar
+        run: |
+          mkdir -p tools/official-crosscheck/lib
+          curl -fsSL -o tools/official-crosscheck/lib/RoaringBitmap-1.6.30.jar \
+            https://repo1.maven.org/maven2/org/roaringbitmap/RoaringBitmap/1.6.30/RoaringBitmap-1.6.30.jar
+          echo "6b25756b77a7f56da2428f9eef6ba6a56b614617  tools/official-crosscheck/lib/RoaringBitmap-1.6.30.jar" | sha1sum -c -
+      - name: Live cross-process check against the official Java implementation
+        run: node tools/official-crosscheck/crosscheck.mjs
