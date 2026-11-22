@@ -154,8 +154,12 @@ moon run cmd/main -- info 3a30000001000000000002001000000001006400e803
 - 官方实现跨进程校验：`node tools/official-crosscheck/crosscheck.mjs` 用同一套
   双向交换对接官方 Java 实现 `org.roaringbitmap:RoaringBitmap` 1.6.30——官方
   testdata 正出自该库家族——在独立 JVM 进程中运行，jar 固定版本并校验
-  SHA-1。19 个用例双向全部通过，CI 每次推送都会执行。至此已有两个独立参考
-  实现为格式提供现场证据，而不再只依赖冻结的 fixture。
+  SHA-1。19 个用例双向全部通过，CI 每次推送都会执行。
+- 官方 Go 跨进程校验：`node tools/go-crosscheck/crosscheck.mjs` 用同一套交换
+  对接官方 Go 实现 `github.com/RoaringBitmap/roaring` v1.9.4，版本与校验和由
+  `go.mod`/`go.sum` 固定。19 个用例双向全部通过，CI 每次推送都会执行。至此
+  CRoaring、Java、Go 三个独立参考实现都为 portable 格式提供现场证据，而不再
+  只依赖冻结的 fixture。
 - 错误输入测试覆盖结构和语义校验，包括代表性数据的每一个截断前缀。
 - release 模式基准和复现方法见 [`docs/benchmarks.md`](docs/benchmarks.md)；这些数据
   只作为本项目基线，不用于宣称优于其他实现。

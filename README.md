@@ -174,8 +174,13 @@ rather than trusting a summary. See
   exchange against the official Java `org.roaringbitmap:RoaringBitmap` 1.6.30 —
   the library family behind the official testdata — in a separate JVM process,
   with a checksum-pinned jar. All 19 cases pass in both directions, and CI runs
-  it on every push. Two independent reference implementations now witness the
-  format live, not just through frozen fixtures.
+  it on every push.
+- Official Go cross-process check: `node tools/go-crosscheck/crosscheck.mjs`
+  runs the same exchange against the official Go
+  `github.com/RoaringBitmap/roaring` v1.9.4, pinned through `go.mod`/`go.sum`.
+  All 19 cases pass in both directions; CI runs it on every push. Three
+  independent reference implementations — CRoaring, Java and Go — now witness
+  the portable format live, not just through frozen fixtures.
 - Malformed-format tests cover structural and semantic validation, including
   every truncated prefix of representative serialized data.
 - Release-mode benchmark fixtures and a reproducible baseline are documented in

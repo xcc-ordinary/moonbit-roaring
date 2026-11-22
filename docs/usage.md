@@ -286,6 +286,19 @@ picks a Run — and the check passes against both, because it compares values
 and round trips rather than demanding one implementation's container choice.
 That is the interoperability property the portable format actually promises.
 
+A third witness uses the **official Go implementation**:
+
+```bash
+node tools/go-crosscheck/crosscheck.mjs
+```
+
+It runs the same matrix against `github.com/RoaringBitmap/roaring` v1.9.4,
+pinned through `go.mod`/`go.sum` (see
+[`tools/go-crosscheck/README.md`](../tools/go-crosscheck/README.md)). Go
+agrees with CRoaring on the three-value tie-break where Java differs, and all
+three pass — the format, not any one implementation's container choice, is
+what the check enforces.
+
 ## The `roaring` command-line tool
 
 `cmd/main` drives the portable format from a shell. Bytes travel as hex, so
