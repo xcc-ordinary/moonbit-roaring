@@ -269,6 +269,23 @@ offset header, the container-selection tie-breaks, and the top of the 32-bit
 value space. CI runs this on every push, so the evidence stays current rather
 than being a one-off recording.
 
+A second witness uses the **official Java implementation** instead of the
+CRoaring WASM port:
+
+```bash
+node tools/official-crosscheck/crosscheck.mjs
+```
+
+It runs the same bidirectional exchange against
+`org.roaringbitmap:RoaringBitmap` 1.6.30 — the library family that generated
+the official testdata — in a separate JVM process, with a checksum-pinned jar
+(see [`tools/official-crosscheck/README.md`](../tools/official-crosscheck/README.md)
+for the download command). The two implementations disagree on one
+tie-break — at three consecutive values Java keeps an Array where CRoaring
+picks a Run — and the check passes against both, because it compares values
+and round trips rather than demanding one implementation's container choice.
+That is the interoperability property the portable format actually promises.
+
 ## The `roaring` command-line tool
 
 `cmd/main` drives the portable format from a shell. Bytes travel as hex, so

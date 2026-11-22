@@ -169,6 +169,13 @@ rather than trusting a summary. See
   set agreement and byte-for-byte re-encoding, covering empty, sparse, dense,
   run and mixed shapes, the offset header, the container-selection tie-breaks
   and the top of the 32-bit value space. CI runs it on every push.
+- Official-implementation cross-process check:
+  `node tools/official-crosscheck/crosscheck.mjs` runs the same bidirectional
+  exchange against the official Java `org.roaringbitmap:RoaringBitmap` 1.6.30 —
+  the library family behind the official testdata — in a separate JVM process,
+  with a checksum-pinned jar. All 19 cases pass in both directions, and CI runs
+  it on every push. Two independent reference implementations now witness the
+  format live, not just through frozen fixtures.
 - Malformed-format tests cover structural and semantic validation, including
   every truncated prefix of representative serialized data.
 - Release-mode benchmark fixtures and a reproducible baseline are documented in
