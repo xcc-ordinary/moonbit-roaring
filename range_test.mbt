@@ -641,6 +641,18 @@ test "flip over a wide interval with partial edge buckets" {
 }
 
 ///|
+test "contains_range stops at a run that starts past the window" {
+  // A Run container whose first run starts above the queried window: the
+  // sorted-run scan must break early and report false rather than walk on.
+  let bm = @moonbit-roaring.RoaringBitmap::from_array([100U, 101U, 102U, 103U])
+  assert_eq(bm.get_stats().run_containers, 1)
+  assert_false(bm.contains_range(0U, 50U))
+  assert_false(bm.contains_range(50U, 99U))
+  assert_true(bm.contains_range(100U, 104U))
+  assert_false(bm.contains_range(100U, 105U))
+}
+
+///|
 test "range_cardinality agrees with counting the materialized window" {
   let mut seed = 6161
   for _trial = 0; _trial < 40; _trial = _trial + 1 {

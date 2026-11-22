@@ -460,3 +460,83 @@ test "deserialize_at handles offset headers at a non-zero offset" {
     @moonbit-roaring.RoaringBitmap::deserialize_at(framed, end) is Err(_),
   )
 }
+
+// ============ strict decoding: malformed container payloads ============
+
+///|
+test "deserialize rejects malformed run entries" {
+  // A single Run container holding two runs, [0,10] and [100,110]. For one
+  // run container (size 1, run cookie, no offset header) the portable layout
+  // is cookie(4) + runflags(1) + key(2) + card-1(2) + nruns(2) + run0(4) +
+  // run1(4), so run0.start sits at byte 11 and run1.start at byte 15. Patching
+  // those fields produces payloads a conforming writer would never emit.
+  let vals = []
+  for i = 0; i <= 10; i = i + 1 {
+    vals.push(i.reinterpret_as_uint())
+  }
+  for i = 100; i <= 110; i = i + 1 {
+    vals.push(i.reinterpret_as_uint())
+  }
+  let bm = @moonbit-roaring.RoaringBitmap::from_array(vals)
+  assert_eq(bm.get_stats().run_containers, 1)
+  let base = []
+  for b in bm.serialize() {
+    base.push(b)
+  }
+  // Sanity-check the layout assumptions before relying on them.
+  assert_eq(base[9], (2 : Byte))
+  assert_eq(base[10], (0 : Byte))
+  assert_true(
+    @moonbit-roaring.RoaringBitmap::deserialize(Bytes::from_array(base))
+    is Ok(_),
+  )
+  // Overlapping runs: run1.start = 5 <= run0.end = 10.
+  let overlapping = base.copy()
+  overlapping[15] = (5 : Byte)
+  overlapping[16] = (0 : Byte)
+  assert_true(
+    @moonbit-roaring.RoaringBitmap::deserialize(Bytes::from_array(overlapping))
+    is Err(_),
+  )
+  // Unsorted runs: run0.start = 100, then run1.start = 0.
+  let unsorted = base.copy()
+  unsorted[11] = (100 : Byte)
+  unsorted[12] = (0 : Byte)
+  unsorted[15] = (0 : Byte)
+  unsorted[16] = (0 : Byte)
+  assert_true(
+    @moonbit-roaring.RoaringBitmap::deserialize(Bytes::from_array(unsorted))
+    is Err(_),
+  )
+  // A run reaching past the container's value space: [65530, 65540].
+  let out_of_range = base.copy()
+  out_of_range[11] = (0xFA : Byte) // 65530 = 0xFFFA, low byte
+  out_of_range[12] = (0xFF : Byte) // high byte
+  out_of_range[13] = (10 : Byte) // length 10 -> end 65540 > 65535
+  out_of_range[14] = (0 : Byte)
+  assert_true(
+    @moonbit-roaring.RoaringBitmap::deserialize(Bytes::from_array(out_of_range))
+    is Err(_),
+  )
+}
+
+///|
+test "deserialize rejects a truncated bitmap container" {
+  // A dense Bitmap container is 8192 bytes of words; chopping the final byte
+  // must be caught by the bitmap-container length check rather than read out
+  // of bounds. The truncated-prefix property test above only covers Array and
+  // Run shapes, so this pins the Bitmap arm explicitly.
+  let bm = @moonbit-roaring.RoaringBitmap::from_array(
+    Array::makei(9000, i => (i * 2).reinterpret_as_uint()),
+  )
+  assert_eq(bm.get_stats().bitmap_containers, 1)
+  let full = bm.serialize()
+  let short = []
+  for i = 0; i < full.length() - 1; i = i + 1 {
+    short.push(full[i])
+  }
+  assert_true(
+    @moonbit-roaring.RoaringBitmap::deserialize(Bytes::from_array(short))
+    is Err(_),
+  )
+}

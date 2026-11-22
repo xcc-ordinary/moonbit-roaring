@@ -257,6 +257,30 @@ test "iter_from works on an empty bitmap and past its end" {
 }
 
 ///|
+test "iter_from starting in an absent bucket jumps to the next present one" {
+  // Buckets 1 and 3 only: a start whose high key has no bucket must seek to
+  // the next present bucket and begin at its first value (the NotFound arm).
+  let bm = @moonbit-roaring.RoaringBitmap::from_array([70000U, 70001U, 200000U])
+  assert_eq(bm.iter_from(0U).to_array(), [70000U, 70001U, 200000U])
+  assert_eq(bm.iter_from(5U).to_array(), [70000U, 70001U, 200000U])
+  assert_eq(bm.iter_from(65535U).to_array(), [70000U, 70001U, 200000U])
+  // Absent bucket 2, between the two present ones.
+  assert_eq(bm.iter_from(131072U).to_array(), [200000U])
+  assert_eq(bm.iter_from(140000U).to_array(), [200000U])
+}
+
+///|
+test "rank of a value in an absent bucket counts only earlier buckets" {
+  // Buckets 1 and 3 present; a value in absent bucket 0 or 2 must return the
+  // count of strictly-earlier containers (the `hc.key > high` arm).
+  let bm = @moonbit-roaring.RoaringBitmap::from_array([70000U, 70001U, 200000U])
+  assert_eq(bm.rank(5U), 0L)
+  assert_eq(bm.rank(65535U), 0L)
+  assert_eq(bm.rank(131072U), 2L)
+  assert_eq(bm.rank(140000U), 2L)
+}
+
+///|
 test "iter_from composes with the rest of Iter" {
   let bm = @moonbit-roaring.RoaringBitmap::from_range(0U, 1000U)
   assert_eq(bm.iter_from(100U).take(5).to_array(), [

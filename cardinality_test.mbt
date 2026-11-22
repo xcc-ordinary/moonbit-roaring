@@ -282,4 +282,17 @@ test "intersects is true exactly when the sets overlap" {
     bitmap_container_values(9000, 1),
   )
   assert_false(dense_a.intersects(dense_b))
+  // Same bucket, overlapping dense Bitmap containers: the word-level AND fast
+  // path must report the overlap (its `return true` arm), not just the
+  // disjoint case above.
+  let dense_c = @moonbit-roaring.RoaringBitmap::from_array(
+    strided_values(9000, 0),
+  )
+  let dense_d = @moonbit-roaring.RoaringBitmap::from_array(
+    strided_values(9000, 2),
+  )
+  assert_eq(dense_c.get_stats().bitmap_containers, 1)
+  assert_eq(dense_d.get_stats().bitmap_containers, 1)
+  assert_true(dense_c.intersects(dense_d))
+  assert_true(dense_d.intersects(dense_c))
 }

@@ -50,6 +50,16 @@ test "remove non-existing value is a no-op" {
 }
 
 ///|
+test "remove a value in an absent bucket is a no-op" {
+  // The value's high key has no container at all (the NotFound arm), distinct
+  // from removing an absent value within an existing bucket.
+  let bm = @moonbit-roaring.RoaringBitmap::from_array([1U, 2U])
+  let removed = bm.remove(70000U)
+  assert_eq(removed.to_array(), [1U, 2U])
+  assert_eq(removed.size(), 2)
+}
+
+///|
 test "remove last element empties bitmap" {
   let bm = @moonbit-roaring.RoaringBitmap::new().add(7U).remove(7U)
   assert_true(bm.is_empty())
