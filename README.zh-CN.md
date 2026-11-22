@@ -139,7 +139,9 @@ moon run cmd/main -- info 3a30000001000000000002001000000001006400e803
 - 2026-11-22 兼容性复核使用 `moon 0.1.20261119`、`moonc
   v0.10.22+124d61d05` 和 `moonrun 0.1.20261119`（`moon version --all`）。
   `wasm`、`wasm-gc`、`js` 均通过检查、构建和全部 243 项测试；三个可运行示例均成功。
-- CI 在 `wasm`、`wasm-gc`、`js` 三个目标运行检查和测试。
+  `native` 目标另在 Linux x86_64 上用系统 C 编译器（gcc）验证：检查、构建、
+  全部 243 项测试与三个示例均通过。
+- CI 在 `wasm`、`wasm-gc`、`js`、`native` 四个目标运行检查和测试。
 - 直接读取 `RoaringFormatSpec/testdata` 中由官方 Java 实现生成的文件，验证已知值，
   再逐字节重新编码。
 - 另有 10 类 fixture 由 `roaring-wasm` v1.1.0 生成。它是第三方、基于 CRoaring

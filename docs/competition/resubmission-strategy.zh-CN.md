@@ -129,6 +129,8 @@ Roaring 的价值不仅是压缩算法，还在于统一的 portable 数据格�
 
 2026-11-22 同日完成审查中最后一项深层优化——迭代器桶内惰性解码。原 `iter`/`iter_from` 虽按桶惰性（不一次性物化整个位图），但每个桶仍用 `container_to_sorted_array` 整体展开：Bitmap/Run 桶会物化最多 65536 个元素，即使只取一个值。改为私有 `LazyCursor` 结构游标——Array 用索引、Bitmap 用当前字内 Kernighan 逐置位位、Run 用"下一值 + 倒计时"缓存当前区间——按容器类型静态分派、每值单层 Option（走查直接复用、不二次包裹），桶内 seek 免解码（Array 二分、Bitmap 掩码当前字、Run 对 run 末尾二分）。新增白盒等价测试：对三种表示与全部采样 seek 点（含字/桶边界、值下方间隙、越界），逐值钉住游标输出 == 解码管线后缀（含非零 key 钉住 combine）；该测试在开发中实际抓住一处"Run seek 越过末 run 后错误重载 run 0"的缺陷并修复。另补 Bitmap 字内 seek、Run 间隙/跨 run seek 两个黑盒测试与一个全量迭代吞吐基准。自身前后实测（`wasm --release`，同一工具链）：`iter_from` 近末端 seek（4096 桶宽位图取 1 值）99.65 µs → 312.68 ns（约 319 倍）；窄区间稠密 `range`（200 万值取 11 值窗口）100.74 µs → 1.05 µs（约 96 倍）。代价如实记录：惰性流式 `iter` 全量遍历混合 fixture 由 100.50 µs 增至 132.34 µs（约 1.32 倍慢），这是逐值惰性相对整桶 eager 解码的固有开销；批量物化 API `to_array()` 仍走原 eager 路径、性能不变——需要一次性取全部值时用 `to_array()`，需要流式/提前停止/seek 时用 `iter`/`iter_from`，与官方 Java/Go"惰性迭代器 + 批量 toArray"的分工一致。三目标测试由 238 增至 243 项全部通过，`moon info` 后 `.mbti` 零 diff（`LazyCursor` 为私有、公共 API 不变），CRoaring WASM 封装、官方 Java、官方 Go 三套跨进程校验仍各 19/19 通过。上述数字为本项目自身前后对照，不据此声称优于其他实现。
 
+2026-11-22 同日将 `native` 目标纳入 CI。此前 CI 仅覆盖 `wasm`、`wasm-gc`、`js`；本次先在 Linux x86_64（系统 gcc，同一工具链 `moon 0.1.20261119` / `moonc v0.10.22+124d61d05`）完整验证 `moon check/build/test --target native`：243 项测试全部通过，三个可运行示例（analytics、inverted_index、portable_window）均正常执行并输出预期结果。随后把 CI 测试矩阵扩为四目标（`wasm`、`wasm-gc`、`js`、`native`），native 在 ubuntu-latest 上用预装 gcc 构建。库本身无平台相关代码，native 通过进一步佐证纯 MoonBit 实现的可移植性；README 中英文验证证据段已同步。
+
 ## 9 月 17 日至 24 日执行顺序
 
 1. 9 月 17—18 日：修正文案和定位；加入公平对比页；添加真实 CI。
