@@ -95,6 +95,22 @@ fn parse_uint(text : String) -> Result[UInt32, String] {
 }
 
 ///|
+/// Decode hex-encoded portable bytes, flattening both failure modes — bad
+/// hex and bad bitmap — into the single error-text channel the subcommands
+/// report through. Kept separate from printing so the decode path stays a
+/// pure, testable function.
+fn decode_hex_bitmap(hex : String) -> Result[@roaring.RoaringBitmap, String] {
+  let data = match parse_hex(hex) {
+    Ok(d) => d
+    Err(e) => return Err(e)
+  }
+  match @roaring.RoaringBitmap::deserialize(data) {
+    Ok(bitmap) => Ok(bitmap)
+    Err(error) => Err(error.to_string())
+  }
+}
+
+///|
 fn report(error : String) -> Unit {
   println("error: \{error}")
 }
@@ -237,6 +253,26 @@ fn run_check(hex : String) -> Unit {
   )
 }
 
+///|
+/// Decode portable bytes and print every value, one decimal per line, in
+/// ascending order. This is the machine-readable counterpart of `info`: an
+/// external process can compare the decoded set against its own element by
+/// element instead of trusting a summary. An empty bitmap prints nothing.
+/// Values stream straight from the lazy iterator, so no intermediate array
+/// is materialized.
+fn run_values(hex : String) -> Unit {
+  let bitmap = match decode_hex_bitmap(hex) {
+    Ok(b) => b
+    Err(e) => {
+      report(e)
+      return
+    }
+  }
+  for value in bitmap.iter() {
+    println(value)
+  }
+}
+
 // ============ entry point ============
 
 ///|
@@ -284,15 +320,27 @@ fn check_command() -> @argparse.Command {
 }
 
 ///|
+fn values_command() -> @argparse.Command {
+  @argparse.Command(
+    "values",
+    about="Decode portable bytes and print every value, one per line",
+    positionals=[
+      @argparse.PositionArg("hex", about="Portable bytes, hex encoded"),
+    ],
+  )
+}
+
+///|
 fn main {
   let info = info_command()
   let encode = encode_command()
   let check = check_command()
+  let values = values_command()
   let cmd = @argparse.Command(
     "roaring",
     about="Inspect and produce Roaring portable bitmaps",
     subcommand_required=true,
-    subcommands=[info, encode, check],
+    subcommands=[info, encode, check, values],
   )
   // argparse prints help and version text itself but reports real parse
   // errors by raising; print those rather than aborting, because `abort`
@@ -345,6 +393,11 @@ fn main {
       match hex_argument() {
         Some(hex) => run_check(hex)
         None => println(check.render_help())
+      }
+    "values" =>
+      match hex_argument() {
+        Some(hex) => run_values(hex)
+        None => println(values.render_help())
       }
     _ => println("unknown subcommand: \{name}")
   }

@@ -58,3 +58,42 @@ test "encode then check agrees on a portable round trip" {
   }
   assert_eq(decoded, bitmap.serialize())
 }
+
+///|
+test "decode_hex_bitmap lists values in ascending order" {
+  // `values` promises an external process a sorted, complete listing, so the
+  // decode path must sort regardless of the order the producer listed them.
+  let bitmap = @roaring.RoaringBitmap::from_array([1000U, 1U, 100U])
+  let decoded = match decode_hex_bitmap(to_hex(bitmap.serialize())) {
+    Ok(b) => b
+    Err(e) => fail("decode failed: \{e}")
+  }
+  assert_eq(decoded.to_array(), [1U, 100U, 1000U])
+}
+
+///|
+test "decode_hex_bitmap accepts the empty bitmap" {
+  let empty = @roaring.RoaringBitmap::new()
+  let decoded = match decode_hex_bitmap(to_hex(empty.serialize())) {
+    Ok(b) => b
+    Err(e) => fail("decode failed: \{e}")
+  }
+  assert_true(decoded.is_empty())
+}
+
+///|
+test "decode_hex_bitmap rejects bad hex and bad portable bytes" {
+  assert_true(decode_hex_bitmap("zz") is Err(_))
+  assert_true(decode_hex_bitmap("abc") is Err(_))
+  assert_true(decode_hex_bitmap("3a300000") is Err(_))
+}
+
+///|
+test "decode_hex_bitmap spans buckets and the top of the value space" {
+  let bitmap = @roaring.RoaringBitmap::from_array([4294967295U, 65536U, 0U])
+  let decoded = match decode_hex_bitmap(to_hex(bitmap.serialize())) {
+    Ok(b) => b
+    Err(e) => fail("decode failed: \{e}")
+  }
+  assert_eq(decoded.to_array(), [0U, 65536U, 4294967295U])
+}
