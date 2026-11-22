@@ -41,7 +41,7 @@ jobs:
           node-version: 22
           cache: npm
           cache-dependency-path: tools/crossref-fixtures/package-lock.json
-      - name: Install MoonBit formatter
+      - name: Install MoonBit
         run: |
           curl -fsSL https://cli.moonbitlang.com/install/unix.sh | bash -s latest
           echo "$HOME/.moon/bin" >> "$GITHUB_PATH"
@@ -52,6 +52,9 @@ jobs:
         run: |
           npm ci
           npm run generate
+      - name: Live cross-process interoperability check
+        working-directory: tools/crossref-fixtures
+        run: npm run crosscheck
       - name: Format generated MoonBit tests
         run: moon fmt
       - name: Verify checked-in fixtures are reproducible
