@@ -28,14 +28,14 @@ fn find_bucket(containers : Array[HighContainer], key : UInt16) -> SearchResult 
 fn rebuild_size(containers : Array[HighContainer]) -> Int64 {
   let mut total = 0L
   for hc in containers {
-    total = total + Int64::from_int(hc.cardinality)
+    total = total + hc.cardinality.to_int64()
   }
   total
 }
 
 ///|
 /// A cardinality clamped to what a 32-bit `Int` can hold. Used where an `Int`
-/// is required but the value may legitimately exceed it — `Iter::new`'s
+/// is required but the value may legitimately exceed it — `Iter`'s
 /// `size_hint`, for instance, which is advisory.
 fn size_as_int(size : Int64) -> Int32 {
   if size > 2147483647L {

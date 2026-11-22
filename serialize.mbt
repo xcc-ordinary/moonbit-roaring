@@ -110,7 +110,7 @@ fn portable_encoded_size(containers : Array[HighContainer]) -> Int32 {
 pub fn RoaringBitmap::serialize(self : RoaringBitmap) -> Bytes {
   let containers = self.containers
   let size = containers.length()
-  let buf = @buffer.Buffer::Buffer(size_hint=portable_encoded_size(containers))
+  let buf = @buffer.Buffer::Buffer(capacity=portable_encoded_size(containers))
   if !has_run_container(containers) {
     // SERIAL_COOKIE_NO_RUNCONTAINER layout: always used when there are no
     // run containers, matching CRoaring's isomorphism recommendation.

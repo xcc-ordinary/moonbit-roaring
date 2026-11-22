@@ -218,7 +218,7 @@ pub fn RoaringBitmap::and_cardinality(
       j = j + 1
     } else {
       count = count +
-        Int64::from_int(container_and_cardinality(a.container, b.container))
+        container_and_cardinality(a.container, b.container).to_int64()
       i = i + 1
       j = j + 1
     }
@@ -242,24 +242,24 @@ pub fn RoaringBitmap::or_cardinality(
     let a = self.containers[i]
     let b = other.containers[j]
     if a.key < b.key {
-      count = count + Int64::from_int(a.cardinality)
+      count = count + a.cardinality.to_int64()
       i = i + 1
     } else if a.key > b.key {
-      count = count + Int64::from_int(b.cardinality)
+      count = count + b.cardinality.to_int64()
       j = j + 1
     } else {
       count = count +
-        Int64::from_int(container_or_cardinality(a.container, b.container))
+        container_or_cardinality(a.container, b.container).to_int64()
       i = i + 1
       j = j + 1
     }
   }
   while i < self.containers.length() {
-    count = count + Int64::from_int(self.containers[i].cardinality)
+    count = count + self.containers[i].cardinality.to_int64()
     i = i + 1
   }
   while j < other.containers.length() {
-    count = count + Int64::from_int(other.containers[j].cardinality)
+    count = count + other.containers[j].cardinality.to_int64()
     j = j + 1
   }
   count
@@ -281,19 +281,19 @@ pub fn RoaringBitmap::andnot_cardinality(
     let a = self.containers[i]
     let b = other.containers[j]
     if a.key < b.key {
-      count = count + Int64::from_int(a.cardinality)
+      count = count + a.cardinality.to_int64()
       i = i + 1
     } else if a.key > b.key {
       j = j + 1
     } else {
       count = count +
-        Int64::from_int(container_andnot_cardinality(a.container, b.container))
+        container_andnot_cardinality(a.container, b.container).to_int64()
       i = i + 1
       j = j + 1
     }
   }
   while i < self.containers.length() {
-    count = count + Int64::from_int(self.containers[i].cardinality)
+    count = count + self.containers[i].cardinality.to_int64()
     i = i + 1
   }
   count
@@ -314,24 +314,24 @@ pub fn RoaringBitmap::xor_cardinality(
     let a = self.containers[i]
     let b = other.containers[j]
     if a.key < b.key {
-      count = count + Int64::from_int(a.cardinality)
+      count = count + a.cardinality.to_int64()
       i = i + 1
     } else if a.key > b.key {
-      count = count + Int64::from_int(b.cardinality)
+      count = count + b.cardinality.to_int64()
       j = j + 1
     } else {
       count = count +
-        Int64::from_int(container_xor_cardinality(a.container, b.container))
+        container_xor_cardinality(a.container, b.container).to_int64()
       i = i + 1
       j = j + 1
     }
   }
   while i < self.containers.length() {
-    count = count + Int64::from_int(self.containers[i].cardinality)
+    count = count + self.containers[i].cardinality.to_int64()
     i = i + 1
   }
   while j < other.containers.length() {
-    count = count + Int64::from_int(other.containers[j].cardinality)
+    count = count + other.containers[j].cardinality.to_int64()
     j = j + 1
   }
   count

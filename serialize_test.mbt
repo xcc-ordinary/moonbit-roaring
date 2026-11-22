@@ -103,7 +103,7 @@ test "round-trip more than 4 containers triggers offset header" {
 
 ///|
 test "deserialize rejects empty input" {
-  let empty_bytes = Bytes::new(0)
+  let empty_bytes = Bytes::make(0, b'\x00')
   match @moonbit-roaring.RoaringBitmap::deserialize(empty_bytes) {
     Ok(_) => fail("expected an error for empty input")
     Err(_) => ()

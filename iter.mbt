@@ -123,7 +123,7 @@ fn walk_containers(
   let mut current = first
   let mut current_key = first_key
   let mut pos = first_pos
-  Iter::new(
+  Iter(
     fn() {
       while pos >= current.length() {
         if bucket_idx >= containers.length() {
@@ -219,9 +219,9 @@ pub fn RoaringBitmap::rank(self : RoaringBitmap, value : UInt32) -> Int64 {
   for i = 0; i < self.containers.length(); i = i + 1 {
     let hc = self.containers[i]
     if hc.key < high {
-      count = count + Int64::from_int(hc.cardinality)
+      count = count + hc.cardinality.to_int64()
     } else if hc.key == high {
-      return count + Int64::from_int(container_rank(hc.container, low))
+      return count + container_rank(hc.container, low).to_int64()
     } else {
       return count
     }
@@ -292,9 +292,7 @@ pub fn RoaringBitmap::range_cardinality(
       Found(idx) => {
         let (lo, hi) = bucket_local_range(key, start, end)
         count = count +
-          Int64::from_int(
-            container_rank_range(self.containers[idx].container, lo, hi),
-          )
+          container_rank_range(self.containers[idx].container, lo, hi).to_int64()
       }
     }
   }
